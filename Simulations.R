@@ -31,11 +31,6 @@ fun.simulate = function(samplesize){
   X = rnorm(n = samplesize, mean = 0, sd = 1)
   A = rbinom(n = samplesize, size = 1, prob = expit(X)) # or is it location = expit(t(PSI)*X), scale = 0?
   PSI = rnorm(n = samplesize, mean = 0, sd = 1) # c(0, 0.5, 0.25, 0.75, -0.5) # should the mu's be binomials?
-  # mu0 = rbinom(n = samplesize, size = 1, prob = beta/( 1+exp( t(PSI)*X ) ) )
-  # mu1 = rbinom(n = samplesize, size = 1, prob = beta)
-  mu0 = rnorm(n = samplesize, mean = 0, sd = beta)
-  mu1 = rnorm(n = samplesize, mean = 0, sd = beta/( 1+exp( t(PSI)*X ) ))
-  # gamma = (mu1-mu0)/mu1 # this is the right one, but it gives me crazy values, especially when making Y0|Y1=1 below
   gamma = expit(t(PSI)*X)
   
   # Y0 defined below
