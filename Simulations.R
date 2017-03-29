@@ -1,3 +1,4 @@
+# This is a change!! for GIT.
 # Thesis simulations
 # March 24, 2017
 # Making my own simulation for the parameter of interest: PC = gamma = 1-1/RR = 1-mu0/mu1.
