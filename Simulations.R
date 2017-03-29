@@ -1,4 +1,3 @@
-# This is a change!! for GIT.
 # Thesis simulations
 # March 24, 2017
 # Making my own simulation for the parameter of interest: PC = gamma = 1-1/RR = 1-mu0/mu1.
@@ -25,19 +24,27 @@ fun.simulate = function(samplesize){
   #set.seed(400)
   
   # true parameters
-  #samplesize = 1000
+  samplesize = 1000
   index = 1:samplesize
   beta = 0.5
   Y1 = rbinom(n = samplesize, size = 1, prob = beta)
-  X = rnorm(n = samplesize, mean = 0, sd = 1)
-  A = rbinom(n = samplesize, size = 1, prob = expit(X)) # or is it location = expit(t(PSI)*X), scale = 0?
-  PSI = rnorm(n = samplesize, mean = 0, sd = 1) # c(0, 0.5, 0.25, 0.75, -0.5) # should the mu's be binomials?
-  gamma = expit(t(PSI)*X)
   
-  # Y0 defined below
-
+  X1 = rnorm(n = samplesize, mean = 0, sd = 1) # correct model
+  X2 = rnorm(n = samplesize, mean = 0, sd = 1)
+  X3 = rnorm(n = samplesize, mean = 0, sd = 1)
+  X4 = rnorm(n = samplesize, mean = 0, sd = 1)
+  
+  X1star = exp(X1/2) # misspecified model
+  X2star = X2/(1 + exp(X1)) + 10
+  X3star = (X1*X3/25 + 0.6)^3
+  X4star = (X2 + X4 + 20)^2
+  
+  A = rbinom(n = samplesize, size = 1, prob = expit(-X1+0.5*X2-0.25*X3-0.1*X4))
+  gamma = expit(-X1+0.5*X2-0.25*X3-0.1*X4)
+  
   # generate data frame
-  df = as.data.frame(cbind(index, X, A, Y1))
+  df = as.data.frame(cbind(index, X1, X2, X3, X4, X1star, X2star, X3star, X4star, gamma, A, Y1))
+  head(df)
   
   # generate Y0 conditional on combinations of values of A and Y1
   dfy11 = df[which(df$Y1==1),]
@@ -53,18 +60,31 @@ fun.simulate = function(samplesize){
   df_wy0$Y = ifelse(df_wy0$A==1, df_wy0$Y1, df_wy0$Y0) 
   
   # ordering data so it's as it was at the beginning
-  df_all = df_wy0[order(df_wy0$index),] 
+  df_gendat = df_wy0[order(df_wy0$index),] 
+  head(df_gendat)
+  
   
   
   # now getting into the models ---
   
-  # Parametric plug-in (P_PI) estimator:
-  P_PI_m0 = glm(Y~X, data = subset(df_all, A == 0), family = "binomial")
-  P_PI_m1 = glm(Y~X, data = subset(df_all, A == 1), family = "binomial")
+  # Correctly specified model: parametric plug-in (P_PI) estimator:
+  corr_P_PI = glm(Y~X1+X2+X3+X4, data = df_gendat, family = "binomial")
+  
+  ######### Crap, how do I get gamma hat?? ##########
+  
+  df_gendat$fittedY = fitted(corr_P_PI)
+  
+  df_gendat_Y11 = df_gendat[which(df_gendat$Y1==1),]
+  
+  
+  
+  gammahat = fitted(corr_P_PI)
+  RMSE_P_PI = sqrt(  mean( (gammahat - gamma)^2 )  )
+  
   
   # gettign fitted values (after inverse link function)
-  fit_P_PI_m0 = fitted(P_PI_m0)
-  fit_P_PI_m1 = fitted(P_PI_m1)
+  fit_P_PI = fitted(corr_P_PI)
+
   
   # making them the same length
   cut_fit_P_PI_m0 = fit_P_PI_m0[1:(min(length(fit_P_PI_m0), length(fit_P_PI_m1)))]
