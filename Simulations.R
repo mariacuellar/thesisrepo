@@ -19,6 +19,7 @@
 # install.packages("glmnet")
 # install.packages("earth")
 # install.packages("wesanderson")
+# install.packages("minpack.lm")
 
 
 # library(clusterPower) # lets me use expit function
@@ -39,6 +40,7 @@
 # library(glmnet)
 # library(earth)
 # library(wesanderson)
+# library(minpack.lm) # different type of nls
 
 
 # Turn off warnings
@@ -123,7 +125,8 @@ fun.simulate = function(samplesize){
   cor_P_PI_gammahat = (cor_P_PI_mu1_hat - cor_P_PI_mu0_hat)/cor_P_PI_mu1_hat
   
   # RMSE 
-  RMSE_cor_P_PI = sqrt(samplesize)*sqrt(  mean( (cor_P_PI_gammahat - gamma)^2 )  ) # 0.310089068
+  RMSE_cor_P_PI = sqrt(  mean( (cor_P_PI_gammahat - gamma)^2 )  ) # 0.310089068
+    sqrt(samplesize)*sqrt(  mean( (cor_P_PI_gammahat - gamma)^2 )  ) # 0.310089068
   
   
   
@@ -140,7 +143,8 @@ fun.simulate = function(samplesize){
   mis_P_PI_gammahat = (mis_P_PI_mu1_hat - mis_P_PI_mu0_hat)/mis_P_PI_mu1_hat
   
   # RMSE 
-  RMSE_mis_P_PI = sqrt(samplesize)*sqrt(  mean( (mis_P_PI_gammahat - gamma)^2 )  ) # 0.2617908249
+  RMSE_mis_P_PI = sqrt(  mean( (mis_P_PI_gammahat - gamma)^2 )  ) # 0.2617908249
+    #sqrt(samplesize)*sqrt(  mean( (mis_P_PI_gammahat - gamma)^2 )  ) # 0.2617908249
   
   
   
@@ -159,7 +163,8 @@ fun.simulate = function(samplesize){
   cor_N_PI_gammahatrf = (cor_N_PI_mu1_hatrf - cor_N_PI_mu0_hatrf)/cor_N_PI_mu1_hatrf
 
   # RMSE
-  RMSE_cor_N_PIrf = sqrt(samplesize)*sqrt(  mean( (cor_N_PI_gammahatrf - gamma)^2 )  ) # 0.4826061
+  RMSE_cor_N_PIrf = sqrt(  mean( (cor_N_PI_gammahatrf - gamma)^2 )  ) # 0.4826061
+    #sqrt(samplesize)*sqrt(  mean( (cor_N_PI_gammahatrf - gamma)^2 )  ) # 0.4826061
   RMSE_cor_N_PI = RMSE_cor_N_PIrf
   
   
@@ -178,7 +183,8 @@ fun.simulate = function(samplesize){
   mis_N_PI_gammahatrf = (mis_N_PI_mu1_hatrf - mis_N_PI_mu0_hatrf)/mis_N_PI_mu1_hatrf
   
   # RMSE
-  RMSE_mis_N_PIrf = sqrt(samplesize)*sqrt(  mean( (mis_N_PI_gammahatrf - gamma)^2 )  ) # 0.4826061
+  RMSE_mis_N_PIrf = sqrt(  mean( (mis_N_PI_gammahatrf - gamma)^2 )  )
+    #sqrt(samplesize)*sqrt(  mean( (mis_N_PI_gammahatrf - gamma)^2 )  ) # 0.4826061
   RMSE_mis_N_PI = RMSE_mis_N_PIrf
 
   
@@ -186,8 +192,8 @@ fun.simulate = function(samplesize){
   
   #  Influence-function-based estimator, untransformed Xs ----
   #  Defining the nuisance parameters
-  cor_IF_mu0 = cor_P_PI_mu0_hat
-  cor_IF_mu1 = cor_P_PI_mu1_hat
+  cor_IF_mu0 = mu0
+  cor_IF_mu1 = mu1
   cor_IF_pi = pi #as.numeric(expit(predict(glm(A~X1+X2+X3+X4, data = dff, family = "binomial"))))
   
   # Defining my pseudo-outcome, which will be the "y" in my glm model, from my influence function
@@ -195,32 +201,34 @@ fun.simulate = function(samplesize){
                                 (1/(1-cor_IF_pi))*(1-A)*(Y-cor_IF_mu0)) + (cor_IF_mu1-cor_IF_mu0)/cor_IF_mu1
   
   # Fitting model
-  # cropping percentiles from top and bottom
+  # Cropping extreme values from top and bottom, by making extreme values equal to .5 or 99.5th percentile
   dff$cor_ystar = cor_ystar
   quantile_lo_cor = quantile(cor_ystar, .005)[[1]]
   quantile_hi_cor = quantile(cor_ystar, .995)[[1]]
-
   dff00 = dff
-  dff00$cor_ystar = ifelse(dff00$cor_ystar>quantile_lo_cor, dff00$cor_ystar, quantile_lo_cor)
-  dff00$cor_ystar = ifelse(dff00$cor_ystar<quantile_hi_cor, dff00$cor_ystar, quantile_hi_cor)
+  dff00$cor_ystar = ifelse(dff00$cor_ystar<quantile_lo_cor, quantile_lo_cor, dff00$cor_ystar)
+  dff00$cor_ystar = ifelse(dff00$cor_ystar>quantile_hi_cor, quantile_hi_cor, dff00$cor_ystar)
   
+  # Add random noise
+  dff00$cor_ystar <- dff00$cor_ystar + rnorm(length(dff00$cor_ystar), sd = 0.01) 
+  
+  # NLS fit without LM
   cor_model_IF = try(nls(
     cor_ystar ~ expit(beta1*X1 + beta2*X2 + beta3*X3 + beta4*X4),
-    start=list(beta1=-1, beta2=0.5, beta3=-0.25, beta4=0.1),
+    start=list(beta1=0, beta2=0, beta3=0, beta4=0),
     data=dff00, nls.control(maxiter = 500)
   ), silent=TRUE)
-
-  # cor_model_IF = try(nls(
-  #   cor_ystar ~ expit(beta1*X1 + beta2*X2 + beta3*X3 + beta4*X4),
-  #   start=list(beta1=-1, beta2=0.5, beta3=-0.25, beta4=0.1),
-  #   data=dff, nls.control(maxiter = 500)
-  # ), silent=TRUE)
+  
+  # # NLS fit with LM - DOES NOT CONVERGE...
+  # mis_model_IF = nlsLM(mis_ystar ~ expit(beta0 + beta1*X1star + beta2*X2star + beta3*X3star + beta4*X4star),
+  #                      data=dff11, start=list(beta0=0, beta1=0, beta2=0, beta3=0, beta4=0))
   
   # Getting predicted values
   cor_gammahat_IF = try(predict(cor_model_IF), silent=TRUE)
   
   # RMSE
-  RMSE_cor_IF = try(sqrt(samplesize)*sqrt(  mean( (cor_gammahat_IF - gamma)^2 )  ), silent=TRUE)
+  RMSE_cor_IF = try(sqrt(  mean( (cor_gammahat_IF - gamma)^2 )  ), silent=TRUE)
+    #try(sqrt(samplesize)*sqrt(  mean( (cor_gammahat_IF - gamma)^2 )  ), silent=TRUE)
   
   # Show NA if I get an error message
   RMSE_cor_IF = ifelse(class(RMSE_cor_IF)=="numeric", RMSE_cor_IF, NA)
@@ -230,45 +238,47 @@ fun.simulate = function(samplesize){
   
   #  Influence-function-based estimator, transformed Xs ----
   #  Defining the nuisance parameters
-  mis_IF_mu0 = mis_P_PI_mu0_hat
-  mis_IF_mu1 = mis_P_PI_mu1_hat
+  mis_IF_mu0 = mu0
+  mis_IF_mu1 = mu1
   mis_IF_pi = pi #as.numeric(expit(predict(glm(A~X1star+X2star+X3star+X4star, data = dff, family = "binomial"))))
 
   # Defining my pseudo-outcome, which will be the "y" in my glm model, from my influence function
-  mis_ystar = (1/mis_IF_mu1)*((mis_IF_mu0/mis_IF_mu1)*(1/mis_IF_pi)*A*(Y-mis_IF_mu1) -
-                                (1/(1-mis_IF_pi))*(1-A)*(Y-mis_IF_mu0)) + (mis_IF_mu1-mis_IF_mu0)/mis_IF_mu1
-
+  mis_ystar = (1/mis_IF_mu1)*( (mis_IF_mu0/mis_IF_mu1)*(1/mis_IF_pi)*A*(Y-mis_IF_mu1) -
+                                (1/(1-mis_IF_pi))*(1-A)*(Y-mis_IF_mu0) ) + (mis_IF_mu1-mis_IF_mu0)/mis_IF_mu1
+  
   # Fitting model
-  # cropping percentiles from top and bottom
+  # Cropping extreme values from top and bottom, by making extreme values equal to .5 or 99.5th percentile
   dff$mis_ystar = mis_ystar
+  range(dff$mis_ystar)
   quantile_lo_mis = quantile(mis_ystar, .005)[[1]]
   quantile_hi_mis = quantile(mis_ystar, .995)[[1]]
-
   dff11 = dff
   dff11$mis_ystar = ifelse(dff11$mis_ystar<quantile_lo_mis, quantile_lo_mis, dff11$mis_ystar)
   dff11$mis_ystar = ifelse(dff11$cor_ystar>quantile_hi_mis, quantile_hi_mis, dff11$mis_ystar)
 
-  mis_model_IF = try(nls(
-    mis_ystar ~ expit(beta1*X1star + beta2*X2star + beta3*X3star + beta4*X4star),
-    start=list(beta1=0, beta2=0, beta3=0, beta4=0),
-    data=dff11, nls.control(maxiter = 500)
-    ), silent=TRUE)
+  # Add noise
+  dff11$mis_ystar <- dff11$mis_ystar + rnorm(length(dff11$mis_ystar), sd = 0.01) 
+  
+  # NLS fit with LM
+  mis_model_IF = nlsLM(mis_ystar ~ expit(beta0 + beta1*X1star + beta2*X2star + beta3*X3star + beta4*X4star),
+    data=dff11, start=list(beta0=0, beta1=0, beta2=0, beta3=0, beta4=0))
 
+  # # NLS wit without LM - HAS SOME ISSUES CONVERGING MOST OF THE TIME WITH SMALL (AND MEDIUM) SAMPLE SIZES
   # mis_model_IF = try(nls(
   #   mis_ystar ~ expit(beta1*X1star + beta2*X2star + beta3*X3star + beta4*X4star),
   #   start=list(beta1=0, beta2=0, beta3=0, beta4=0),
   #   data=dff, nls.control(maxiter = 500)
   # ), silent=TRUE)
-
+  
   # Getting predicted values
   mis_gammahat_IF = try(predict(mis_model_IF), silent=TRUE)
 
   # RMSE
-  RMSE_mis_IF = try(sqrt(samplesize)*sqrt(  mean( (mis_gammahat_IF - gamma)^2 )  ), silent=TRUE)
+  RMSE_mis_IF = try(sqrt(  mean( (mis_gammahat_IF - gamma)^2 )  ), silent=TRUE)
+    #try(sqrt(samplesize)*sqrt(  mean( (mis_gammahat_IF - gamma)^2 )  ), silent=TRUE)
   
   # Show NA if I get an error message
-  RMSE_mis_IF = ifelse(class(RMSE_mis_IF)=="numeric", RMSE_mis_IF, NA)
-
+  RMSE_mis_IF = ifelse(class(RMSE_mis_IF)=="numeric" && RMSE_mis_IF!=Inf, RMSE_mis_IF, NA)
   
   
   # Function will return this
@@ -278,16 +288,25 @@ fun.simulate = function(samplesize){
 
 
 
-
 fun.simulate(200)
+fun.simulate(200)
+fun.simulate(200)
+fun.simulate(200)
+
+fun.simulate(500)
+fun.simulate(500)
+fun.simulate(500)
+fun.simulate(500)
+
+barplot(fun.simulate(2000))
 # testing = fun.simulate(1000)
 # barplot(testing)
 # 
 # thelength = length(fun.simulate(1000))
 # 
 # # Repeat simulation for different sample sizes
-samplesizes = c(rep(200, 30), rep(1000, 30), rep(5000, 30))
-samplesizes = c(rep(200, 10))
+samplesizes = c(rep(200, 100), rep(1000, 100), rep(5000, 100))
+#samplesizes = c(rep(200, 10))
 
 arr <- array(dim=c(length(samplesizes),thelength+1))
 colnames(arr) <- c("sample_sizes", 
@@ -312,34 +331,30 @@ arr1=arr
 
 
 
-s=1
-for(s in 1:length(samplesizes)){
-    fun.results = fun.simulate(samplesizes[s])
-    fun.results
-    errorcount = which(is.na(fun.results[5]))
-    
-    dff[which(dff$A==0),], 
-    
-    arr[s, 2] = fun.results[1]
-    arr[s, 3] = fun.results[2]
-    arr[s, 4] = fun.results[3]
-    arr[s, 5] = fun.results[4]
-    
-    while(!is.na(fun.results[5]) && !is.na(fun.results[6])){
-    
-    arr[s, 6] = fun.results[5]
-    arr[s, 7] = fun.results[6]
-    
-    i=i+1
-    }
-  }
 
-arr
-arr
+# s=1
+# for(s in 1:length(samplesizes)){
+#     fun.results = fun.simulate(samplesizes[s])
+#     fun.results
+#     errorcount = which(is.na(fun.results[5]))
+#     
+#     dff[which(dff$A==0),], 
+#     
+#     arr[s, 2] = fun.results[1]
+#     arr[s, 3] = fun.results[2]
+#     arr[s, 4] = fun.results[3]
+#     arr[s, 5] = fun.results[4]
+#     
+#     while(!is.na(fun.results[5]) && !is.na(fun.results[6])){
+#     
+#     arr[s, 6] = fun.results[5]
+#     arr[s, 7] = fun.results[6]
+#     
+#     i=i+1
+#     }
+#   }
+
 df.sim = as.data.frame(arr)
-df.sim1 = as.data.frame(arr)
-arr1=arr
-
 colnames(df.sim)[2] = "Parametric_correctly_specified"
 colnames(df.sim)[3] = "Parametric_misspecified"
 colnames(df.sim)[4] = "Nonparametric_untransformed_Xs"
@@ -351,7 +366,11 @@ colnames(df.sim)[7] = "Influence_function_transformed_Xs"
 # head(df.sim)
 
 setwd(WD_simulation)
-save(df.sim, file="df.sim.fin-2017-05-15.rda")
+save(df.sim, file="df.sim.fin-2017-05-16_2.rda")
+
+# REMOVE OUTLIERS FOR Parametric_misspecified
+df.sim = df.sim[which(df.sim$Parametric_misspecified<0.5),]
+
 
 
 # Alert when it's done running
@@ -368,7 +387,7 @@ ggplot(na.omit(mdf), aes(x = sample_sizes, y=value, color=Estimator)) + geom_poi
   geom_smooth(method = "loess", size = 1.5) +
   labs(title = "Comparison of four estimators, 100 iterations per sample size", y="Root mean squared error", x="Sample size")
 dev.off()
-
+View(mdf)
 
 
 # Barplot with error bars
@@ -391,9 +410,11 @@ data_summary <- function(data, varname, groupnames){
   return(data_sum)
 }
 
+
 # Create new dataframe for barplot
 dfsum = data_summary(data = dat, varname = "RMSE", groupnames = c("Sample_Size", "Algorithm"))
 dfsum$Algorithm = as.factor(dfsum$Algorithm)
+
 
 # Barplot with ggplot
 bp = ggplot(dfsum, aes(x=Sample_Size, y=RMSE, fill=Algorithm)) + 
@@ -403,7 +424,7 @@ bp = ggplot(dfsum, aes(x=Sample_Size, y=RMSE, fill=Algorithm)) +
 
 
 setwd(WD_figs)
-pdf("20170515_Barplot.pdf", width=8, height=3.3)
+pdf("20170516_Barplot.pdf", width=8, height=3.3)
 bp + scale_fill_brewer(palette="Paired")
 dev.off()
 
