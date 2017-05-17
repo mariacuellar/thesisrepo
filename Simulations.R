@@ -125,8 +125,7 @@ fun.simulate = function(samplesize){
   cor_P_PI_gammahat = (cor_P_PI_mu1_hat - cor_P_PI_mu0_hat)/cor_P_PI_mu1_hat
   
   # RMSE 
-  RMSE_cor_P_PI = sqrt(  mean( (cor_P_PI_gammahat - gamma)^2 )  ) # 0.310089068
-    sqrt(samplesize)*sqrt(  mean( (cor_P_PI_gammahat - gamma)^2 )  ) # 0.310089068
+  RMSE_cor_P_PI = sqrt(samplesize)*sqrt(  mean( (cor_P_PI_gammahat - gamma)^2 )  ) # 0.310089068
   
   
   
@@ -143,8 +142,7 @@ fun.simulate = function(samplesize){
   mis_P_PI_gammahat = (mis_P_PI_mu1_hat - mis_P_PI_mu0_hat)/mis_P_PI_mu1_hat
   
   # RMSE 
-  RMSE_mis_P_PI = sqrt(  mean( (mis_P_PI_gammahat - gamma)^2 )  ) # 0.2617908249
-    #sqrt(samplesize)*sqrt(  mean( (mis_P_PI_gammahat - gamma)^2 )  ) # 0.2617908249
+  RMSE_mis_P_PI = sqrt(samplesize)*sqrt(  mean( (mis_P_PI_gammahat - gamma)^2 )  ) # 0.2617908249
   
   
   
@@ -163,8 +161,7 @@ fun.simulate = function(samplesize){
   cor_N_PI_gammahatrf = (cor_N_PI_mu1_hatrf - cor_N_PI_mu0_hatrf)/cor_N_PI_mu1_hatrf
 
   # RMSE
-  RMSE_cor_N_PIrf = sqrt(  mean( (cor_N_PI_gammahatrf - gamma)^2 )  ) # 0.4826061
-    #sqrt(samplesize)*sqrt(  mean( (cor_N_PI_gammahatrf - gamma)^2 )  ) # 0.4826061
+  RMSE_cor_N_PIrf = sqrt(samplesize)*sqrt(  mean( (cor_N_PI_gammahatrf - gamma)^2 )  ) # 0.4826061
   RMSE_cor_N_PI = RMSE_cor_N_PIrf
   
   
@@ -183,8 +180,7 @@ fun.simulate = function(samplesize){
   mis_N_PI_gammahatrf = (mis_N_PI_mu1_hatrf - mis_N_PI_mu0_hatrf)/mis_N_PI_mu1_hatrf
   
   # RMSE
-  RMSE_mis_N_PIrf = sqrt(  mean( (mis_N_PI_gammahatrf - gamma)^2 )  )
-    #sqrt(samplesize)*sqrt(  mean( (mis_N_PI_gammahatrf - gamma)^2 )  ) # 0.4826061
+  RMSE_mis_N_PIrf = sqrt(samplesize)*sqrt(  mean( (mis_N_PI_gammahatrf - gamma)^2 )  ) # 0.4826061
   RMSE_mis_N_PI = RMSE_mis_N_PIrf
 
   
@@ -192,8 +188,8 @@ fun.simulate = function(samplesize){
   
   #  Influence-function-based estimator, untransformed Xs ----
   #  Defining the nuisance parameters
-  cor_IF_mu0 = mu0
-  cor_IF_mu1 = mu1
+  cor_IF_mu0 = cor_P_PI_mu0_hat
+  cor_IF_mu1 = cor_P_PI_mu1_hat
   cor_IF_pi = pi #as.numeric(expit(predict(glm(A~X1+X2+X3+X4, data = dff, family = "binomial"))))
   
   # Defining my pseudo-outcome, which will be the "y" in my glm model, from my influence function
@@ -227,8 +223,7 @@ fun.simulate = function(samplesize){
   cor_gammahat_IF = try(predict(cor_model_IF), silent=TRUE)
   
   # RMSE
-  RMSE_cor_IF = try(sqrt(  mean( (cor_gammahat_IF - gamma)^2 )  ), silent=TRUE)
-    #try(sqrt(samplesize)*sqrt(  mean( (cor_gammahat_IF - gamma)^2 )  ), silent=TRUE)
+  RMSE_cor_IF = try(sqrt(samplesize)*sqrt(  mean( (cor_gammahat_IF - gamma)^2 )  ), silent=TRUE)
   
   # Show NA if I get an error message
   RMSE_cor_IF = ifelse(class(RMSE_cor_IF)=="numeric", RMSE_cor_IF, NA)
@@ -238,8 +233,8 @@ fun.simulate = function(samplesize){
   
   #  Influence-function-based estimator, transformed Xs ----
   #  Defining the nuisance parameters
-  mis_IF_mu0 = mu0
-  mis_IF_mu1 = mu1
+  mis_IF_mu0 = mis_N_PI_mu0_hatrf
+  mis_IF_mu1 = mis_N_PI_mu1_hatrf
   mis_IF_pi = pi #as.numeric(expit(predict(glm(A~X1star+X2star+X3star+X4star, data = dff, family = "binomial"))))
 
   # Defining my pseudo-outcome, which will be the "y" in my glm model, from my influence function
@@ -260,25 +255,25 @@ fun.simulate = function(samplesize){
   dff11$mis_ystar <- dff11$mis_ystar + rnorm(length(dff11$mis_ystar), sd = 0.01) 
   
   # NLS fit with LM
-  mis_model_IF = nlsLM(mis_ystar ~ expit(beta0 + beta1*X1star + beta2*X2star + beta3*X3star + beta4*X4star),
-    data=dff11, start=list(beta0=0, beta1=0, beta2=0, beta3=0, beta4=0))
+  # mis_model_IF = nlsLM(mis_ystar ~ expit(beta0 + beta1*X1star + beta2*X2star + beta3*X3star + beta4*X4star),
+  #   data=dff11, start=list(beta0=0, beta1=0, beta2=0, beta3=0, beta4=0))
 
-  # # NLS wit without LM - HAS SOME ISSUES CONVERGING MOST OF THE TIME WITH SMALL (AND MEDIUM) SAMPLE SIZES
-  # mis_model_IF = try(nls(
-  #   mis_ystar ~ expit(beta1*X1star + beta2*X2star + beta3*X3star + beta4*X4star),
-  #   start=list(beta1=0, beta2=0, beta3=0, beta4=0),
-  #   data=dff, nls.control(maxiter = 500)
-  # ), silent=TRUE)
-  
+  # NLS wit without LM - HAS SOME ISSUES CONVERGING MOST OF THE TIME WITH SMALL (AND MEDIUM) SAMPLE SIZES
+  mis_model_IF = try(nls(
+    mis_ystar ~ expit(beta1*X1 + beta2*X2 + beta3*X3 + beta4*X4),
+    start=list(beta1=0, beta2=0, beta3=0, beta4=0),
+    data=dff11, nls.control(maxiter = 500)
+  ), silent=TRUE)
+
   # Getting predicted values
   mis_gammahat_IF = try(predict(mis_model_IF), silent=TRUE)
 
   # RMSE
-  RMSE_mis_IF = try(sqrt(  mean( (mis_gammahat_IF - gamma)^2 )  ), silent=TRUE)
-    #try(sqrt(samplesize)*sqrt(  mean( (mis_gammahat_IF - gamma)^2 )  ), silent=TRUE)
+  RMSE_mis_IF = try(sqrt(samplesize)*sqrt(  mean( (mis_gammahat_IF - gamma)^2 )  ), silent=TRUE)
   
   # Show NA if I get an error message
   RMSE_mis_IF = ifelse(class(RMSE_mis_IF)=="numeric" && RMSE_mis_IF!=Inf, RMSE_mis_IF, NA)
+  
   
   
   # Function will return this
@@ -306,7 +301,7 @@ barplot(fun.simulate(2000))
 # 
 # # Repeat simulation for different sample sizes
 samplesizes = c(rep(200, 100), rep(1000, 100), rep(5000, 100))
-#samplesizes = c(rep(200, 10))
+samplesizes = c(rep(1000, 15))
 
 arr <- array(dim=c(length(samplesizes),thelength+1))
 colnames(arr) <- c("sample_sizes", 
@@ -330,35 +325,11 @@ df.sim = as.data.frame(arr)
 arr1=arr
 
 
-
-
-# s=1
-# for(s in 1:length(samplesizes)){
-#     fun.results = fun.simulate(samplesizes[s])
-#     fun.results
-#     errorcount = which(is.na(fun.results[5]))
-#     
-#     dff[which(dff$A==0),], 
-#     
-#     arr[s, 2] = fun.results[1]
-#     arr[s, 3] = fun.results[2]
-#     arr[s, 4] = fun.results[3]
-#     arr[s, 5] = fun.results[4]
-#     
-#     while(!is.na(fun.results[5]) && !is.na(fun.results[6])){
-#     
-#     arr[s, 6] = fun.results[5]
-#     arr[s, 7] = fun.results[6]
-#     
-#     i=i+1
-#     }
-#   }
-
 df.sim = as.data.frame(arr)
-colnames(df.sim)[2] = "Parametric_correctly_specified"
-colnames(df.sim)[3] = "Parametric_misspecified"
-colnames(df.sim)[4] = "Nonparametric_untransformed_Xs"
-colnames(df.sim)[5] = "Nonparametric_transformed_Xs"
+colnames(df.sim)[2] = "Plugin_parametric_correctly_specified"
+colnames(df.sim)[3] = "Plugin_parametric_misspecified"
+colnames(df.sim)[4] = "Plugin_nonparametric_untransformed_Xs"
+colnames(df.sim)[5] = "Plugin_nonparametric_transformed_Xs"
 colnames(df.sim)[6] = "Influence_function_untransformed_Xs"
 colnames(df.sim)[7] = "Influence_function_transformed_Xs"
 # Backup table: 
@@ -420,7 +391,7 @@ dfsum$Algorithm = as.factor(dfsum$Algorithm)
 bp = ggplot(dfsum, aes(x=Sample_Size, y=RMSE, fill=Algorithm)) + 
   geom_bar(stat="identity", color="black", position=position_dodge()) +
   geom_errorbar(aes(ymin=RMSE-sd, ymax=RMSE+sd), width=.2, position=position_dodge(.9)) +
-  ggtitle("Comparison of estimators, 100 iterations per sample size") + xlab("Sample size") + ylab("Rootmean squared error")
+  ggtitle("Plug-in vs. influence-function estimators, 500 iterations per sample size") + xlab("Sample size") + ylab("Rootmean squared error")
 
 
 setwd(WD_figs)
