@@ -1,5 +1,5 @@
 # # Thesis simulations
-# # May 4, 2017
+# # May 17, 2017
 # # Making my own simulation for the parameter of interest: PC = gamma = 1-1/RR = 1-mu0/mu1.
 # 
 # # define working directory
@@ -113,171 +113,177 @@ fun.simulate = function(samplesize){
   
   # now getting into the models ---
   
-  # Correctly specified model: parametric plug-in (P_PI) estimator:
-  cor_P_PI_mu0 = nls(Y~beta1/(1+exp(-X1+0.5*X2-0.25*X3-0.1*X4)), start=list(beta1=0.5), data = dff[which(dff$A==0),]) # take away the parameters and let it estimate them
-  cor_P_PI_mu1 = glm(Y~X1+X2+X3+X4, data = dff[which(dff$A==1),], family = "binomial")
+  # Plug-in, parametric, untransformed X's (correctly specified model)
+  PI_P_X_mu0 = nls(Y~beta1/(1+exp(-X1+0.5*X2-0.25*X3-0.1*X4)), start=list(beta1=0.5), data = dff[which(dff$A==0),]) # take away the parameters and let it estimate them
+  PI_P_X_mu1 = glm(Y~X1+X2+X3+X4, data = dff[which(dff$A==1),], family = "binomial")
   
   # getting fitted values (after inverse link function)
-  cor_P_PI_mu0_hat = predict(cor_P_PI_mu0, newdata = dff)
-  cor_P_PI_mu1_hat = predict.glm(cor_P_PI_mu1, newdata = dff, type="response")
+  PI_P_X_mu0_hat = predict(PI_P_X_mu0, newdata = dff)
+  PI_P_X_mu1_hat = predict(PI_P_X_mu1, newdata = dff, type="response")
   
   # calculating gamma hat
-  cor_P_PI_gammahat = (cor_P_PI_mu1_hat - cor_P_PI_mu0_hat)/cor_P_PI_mu1_hat
+  PI_P_X_gammahat = (PI_P_X_mu1_hat - PI_P_X_mu0_hat)/PI_P_X_mu1_hat
   
   # RMSE 
-  RMSE_cor_P_PI = sqrt(samplesize)*sqrt(  mean( (cor_P_PI_gammahat - gamma)^2 )  ) # 0.310089068
+  PI_P_X_RMSE = sqrt(  mean( (PI_P_X_gammahat - gamma)^2 )  ) # 0.310089068
+    #sqrt(samplesize)*sqrt(  mean( (PI_P_X_gammahat - gamma)^2 )  ) # 0.310089068
   
   
   
   
-  # Misspecified model: parametric plug-in (P_PI) estimator:
-  mis_P_PI_mu0 = glm(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==0),], family = "binomial")
-  mis_P_PI_mu1 = glm(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==1),], family = "binomial")
+  # Plug-in, parametric, transformed X's (misspecified model)
+  PI_P_Xstar_mu0 = glm(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==0),], family = "binomial")
+  PI_P_Xstar_mu1 = glm(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==1),], family = "binomial")
   
   # getting fitted values (after inverse link function)
-  mis_P_PI_mu0_hat = predict.glm(mis_P_PI_mu0, newdata = dff, type="response")
-  mis_P_PI_mu1_hat = predict.glm(mis_P_PI_mu1, newdata = dff, type="response")
+  PI_P_Xstar_mu0_hat = predict(PI_P_Xstar_mu0, newdata = dff, type="response")
+  PI_P_Xstar_mu1_hat = predict(PI_P_Xstar_mu1, newdata = dff, type="response")
   
   # calculating gamma hat
-  mis_P_PI_gammahat = (mis_P_PI_mu1_hat - mis_P_PI_mu0_hat)/mis_P_PI_mu1_hat
-  
-  # RMSE 
-  RMSE_mis_P_PI = sqrt(samplesize)*sqrt(  mean( (mis_P_PI_gammahat - gamma)^2 )  ) # 0.2617908249
-  
-  
-  
-  
-  # Correctly specified model: NONparametric plug-in (P_PI) estimator:
-  # RandomForest----
-  # Fitting model
-  cor_N_PI_mu0rf = randomForest(Y~X1+X2+X3+X4, data = dff[which(dff$A==0),], type=regression)
-  cor_N_PI_mu1rf = randomForest(Y~X1+X2+X3+X4, data = dff[which(dff$A==1),], type=regression)
+  PI_P_Xstar_gammahat  = (PI_P_Xstar_mu1_hat - PI_P_Xstar_mu0_hat)/PI_P_Xstar_mu1_hat
 
-  # Getting fitted values (after inverse link function)
-  cor_N_PI_mu0_hatrf = as.numeric(expit(predict(cor_N_PI_mu0rf, newdata=dff))) # with random forest
-  cor_N_PI_mu1_hatrf = as.numeric(expit(predict(cor_N_PI_mu1rf, newdata=dff)))
-  
-  # Gamma hat
-  cor_N_PI_gammahatrf = (cor_N_PI_mu1_hatrf - cor_N_PI_mu0_hatrf)/cor_N_PI_mu1_hatrf
-
-  # RMSE
-  RMSE_cor_N_PIrf = sqrt(samplesize)*sqrt(  mean( (cor_N_PI_gammahatrf - gamma)^2 )  ) # 0.4826061
-  RMSE_cor_N_PI = RMSE_cor_N_PIrf
+    # RMSE 
+  PI_P_Xstar_RMSE = sqrt(  mean( (PI_P_Xstar_gammahat - gamma)^2 )  ) # 0.2617908249
+    #sqrt(samplesize)*sqrt(  mean( (PI_P_Xstar_gammahat - gamma)^2 )  ) # 0.2617908249
   
   
   
-  # Misspecified model: NONparametric plug-in (P_PI) estimator:
-  # RandomForest----
-  # Fitting model
-  mis_N_PI_mu0rf = randomForest(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==0),], type=regression)
-  mis_N_PI_mu1rf = randomForest(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==1),], type=regression)
-  
-  # Getting fitted values (after inverse link function)
-  mis_N_PI_mu0_hatrf = as.numeric(expit(predict(mis_N_PI_mu0rf, newdata=dff))) # with random forest
-  mis_N_PI_mu1_hatrf = as.numeric(expit(predict(mis_N_PI_mu1rf, newdata=dff)))
-  #
-  # Gamma hat
-  mis_N_PI_gammahatrf = (mis_N_PI_mu1_hatrf - mis_N_PI_mu0_hatrf)/mis_N_PI_mu1_hatrf
-  
-  # RMSE
-  RMSE_mis_N_PIrf = sqrt(samplesize)*sqrt(  mean( (mis_N_PI_gammahatrf - gamma)^2 )  ) # 0.4826061
-  RMSE_mis_N_PI = RMSE_mis_N_PIrf
-
   
   
+  # Plug-in, nonparametric, untransformed X's estimator:
   
-  #  Influence-function-based estimator, untransformed Xs ----
-  #  Defining the nuisance parameters
-  cor_IF_mu0 = cor_P_PI_mu0_hat
-  cor_IF_mu1 = cor_P_PI_mu1_hat
-  cor_IF_pi = pi #as.numeric(expit(predict(glm(A~X1+X2+X3+X4, data = dff, family = "binomial"))))
-  
-  # Defining my pseudo-outcome, which will be the "y" in my glm model, from my influence function
-  cor_ystar = (1/cor_IF_mu1)*((cor_IF_mu0/cor_IF_mu1)*(1/cor_IF_pi)*A*(Y-cor_IF_mu1) - 
-                                (1/(1-cor_IF_pi))*(1-A)*(Y-cor_IF_mu0)) + (cor_IF_mu1-cor_IF_mu0)/cor_IF_mu1
-  
-  # Fitting model
-  # Cropping extreme values from top and bottom, by making extreme values equal to .5 or 99.5th percentile
-  dff$cor_ystar = cor_ystar
-  quantile_lo_cor = quantile(cor_ystar, .005)[[1]]
-  quantile_hi_cor = quantile(cor_ystar, .995)[[1]]
-  dff00 = dff
-  dff00$cor_ystar = ifelse(dff00$cor_ystar<quantile_lo_cor, quantile_lo_cor, dff00$cor_ystar)
-  dff00$cor_ystar = ifelse(dff00$cor_ystar>quantile_hi_cor, quantile_hi_cor, dff00$cor_ystar)
-  
-  # Add random noise
-  dff00$cor_ystar <- dff00$cor_ystar + rnorm(length(dff00$cor_ystar), sd = 0.01) 
-  
-  # NLS fit without LM
-  cor_model_IF = try(nls(
-    cor_ystar ~ expit(beta1*X1 + beta2*X2 + beta3*X3 + beta4*X4),
-    start=list(beta1=0, beta2=0, beta3=0, beta4=0),
-    data=dff00, nls.control(maxiter = 500)
-  ), silent=TRUE)
-  
-  # # NLS fit with LM - DOES NOT CONVERGE...
-  # mis_model_IF = nlsLM(mis_ystar ~ expit(beta0 + beta1*X1star + beta2*X2star + beta3*X3star + beta4*X4star),
-  #                      data=dff11, start=list(beta0=0, beta1=0, beta2=0, beta3=0, beta4=0))
+  # Support vector machine----
+  # Fitting model:
+  PI_N_X_mu0 = svm(Y~X1+X2+X3+X4, data = dff[which(dff$A==0),])
+  PI_N_X_mu1 = svm(Y~X1+X2+X3+X4, data = dff[which(dff$A==1),])
   
   # Getting predicted values
-  cor_gammahat_IF = try(predict(cor_model_IF), silent=TRUE)
+  PI_N_X_mu0_hat = expit(predict(PI_N_X_mu0, newdata = dff))
+  PI_N_X_mu1_hat = expit(predict(PI_N_X_mu1, newdata = dff))
+  
+  # Gamma hat
+  PI_N_X_gammahat = (PI_N_X_mu1_hat - PI_N_X_mu0_hat)/PI_N_X_mu1_hat
   
   # RMSE
-  RMSE_cor_IF = try(sqrt(samplesize)*sqrt(  mean( (cor_gammahat_IF - gamma)^2 )  ), silent=TRUE)
-  
-  # Show NA if I get an error message
-  RMSE_cor_IF = ifelse(class(RMSE_cor_IF)=="numeric", RMSE_cor_IF, NA)
+  PI_N_X_RMSE = sqrt(  mean( (PI_N_X_gammahat - gamma)^2 )  )
+    #sqrt(samplesize)*sqrt(  mean( (PI_N_X_gammahat - gamma)^2 )  )
   
   
   
   
-  #  Influence-function-based estimator, transformed Xs ----
-  #  Defining the nuisance parameters
-  mis_IF_mu0 = mis_N_PI_mu0_hatrf
-  mis_IF_mu1 = mis_N_PI_mu1_hatrf
-  mis_IF_pi = pi #as.numeric(expit(predict(glm(A~X1star+X2star+X3star+X4star, data = dff, family = "binomial"))))
+  # Plug-in, nonparametric, transformed X's estimator:
+  # Fitting model:
+  PI_N_Xstar_mu0 = svm(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==0),])
+  PI_N_Xstar_mu1 = svm(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==1),])
+  
+  # Getting predicted values
+  PI_N_Xstar_mu0_hat = expit(predict(PI_N_Xstar_mu0, newdata = dff))
+  PI_N_Xstar_mu1_hat = expit(predict(PI_N_Xstar_mu1, newdata = dff))
+  
+  # Gamma hat
+  PI_N_Xstar_gammahat = (PI_N_Xstar_mu1_hat - PI_N_Xstar_mu0_hat)/PI_N_Xstar_mu1_hat
+  
+  # RMSE
+  PI_N_Xstar_RMSE = sqrt(  mean( (PI_N_Xstar_gammahat - gamma)^2 )  )
+    #sqrt(samplesize)*sqrt(  mean( (PI_N_Xstar_gammahat - gamma)^2 )  )
+  
 
-  # Defining my pseudo-outcome, which will be the "y" in my glm model, from my influence function
-  mis_ystar = (1/mis_IF_mu1)*( (mis_IF_mu0/mis_IF_mu1)*(1/mis_IF_pi)*A*(Y-mis_IF_mu1) -
-                                (1/(1-mis_IF_pi))*(1-A)*(Y-mis_IF_mu0) ) + (mis_IF_mu1-mis_IF_mu0)/mis_IF_mu1
+
+  
+  
+  
+  #  Influence-function-based estimator, estimate nuisance parameters with plugin parametric untransformed Xs ----
+  #  Defining the nuisance parameters
+  IF_P_X_mu0 = PI_P_X_mu0_hat
+  IF_P_X_mu1 = PI_P_X_mu1_hat
+  IF_P_X_pi = pi
+  
+  # Defining my pseudo-outcome
+  IF_P_X_ystar = (1/IF_P_X_mu1)*((IF_P_X_mu0/IF_P_X_mu1)*(1/IF_P_X_pi)*A*(Y-IF_P_X_mu1) - 
+                                (1/(1-IF_P_X_pi))*(1-A)*(Y-IF_P_X_mu0)) + (IF_P_X_mu1-IF_P_X_mu0)/IF_P_X_mu1
   
   # Fitting model
-  # Cropping extreme values from top and bottom, by making extreme values equal to .5 or 99.5th percentile
-  dff$mis_ystar = mis_ystar
-  range(dff$mis_ystar)
-  quantile_lo_mis = quantile(mis_ystar, .005)[[1]]
-  quantile_hi_mis = quantile(mis_ystar, .995)[[1]]
-  dff11 = dff
-  dff11$mis_ystar = ifelse(dff11$mis_ystar<quantile_lo_mis, quantile_lo_mis, dff11$mis_ystar)
-  dff11$mis_ystar = ifelse(dff11$cor_ystar>quantile_hi_mis, quantile_hi_mis, dff11$mis_ystar)
-
-  # Add noise
-  dff11$mis_ystar <- dff11$mis_ystar + rnorm(length(dff11$mis_ystar), sd = 0.01) 
+  IF_P_X_model = try(nls(
+    IF_P_X_ystar ~ expit(beta1*X1 + beta2*X2 + beta3*X3 + beta4*X4),
+    start=list(beta1=-1, beta2=.5, beta3=-.25, beta4=-.1),
+    data=dff, nls.control(maxiter = 500)
+  ), silent=TRUE)
   
-  # NLS fit with LM
-  # mis_model_IF = nlsLM(mis_ystar ~ expit(beta0 + beta1*X1star + beta2*X2star + beta3*X3star + beta4*X4star),
-  #   data=dff11, start=list(beta0=0, beta1=0, beta2=0, beta3=0, beta4=0))
+  # Getting predicted values
+  IF_P_X_gammahat = try(predict(IF_P_X_model), silent=TRUE)
+  
+  # RMSE
+  IF_P_X_RMSE = try(sqrt(  mean( (IF_P_X_gammahat - gamma)^2 )  ), silent=TRUE)
+    #try(sqrt(samplesize)*sqrt(  mean( (IF_P_X_gammahat - gamma)^2 )  ), silent=TRUE)
+  
+  # Show NA if I get an error message
+  IF_P_X_RMSE = ifelse(class(IF_P_X_RMSE)=="numeric", IF_P_X_RMSE, NA)
 
-  # NLS wit without LM - HAS SOME ISSUES CONVERGING MOST OF THE TIME WITH SMALL (AND MEDIUM) SAMPLE SIZES
-  mis_model_IF = try(nls(
-    mis_ystar ~ expit(beta1*X1 + beta2*X2 + beta3*X3 + beta4*X4),
-    start=list(beta1=0, beta2=0, beta3=0, beta4=0),
-    data=dff11, nls.control(maxiter = 500)
+  
+  
+  
+  #  Influence-function-based estimator, estimate nuisance parameters with plugin parametric transformed Xs ----
+  #  Defining the nuisance parameters
+  IF_P_Xstar_mu0 = PI_P_Xstar_mu0_hat
+  IF_P_Xstar_mu1 = PI_P_Xstar_mu1_hat
+  IF_P_Xstar_pi = pi
+
+  # Defining my pseudo-outcome
+  IF_P_Xstar_ystar = (1/IF_P_Xstar_mu1)*( (IF_P_Xstar_mu0/IF_P_Xstar_mu1)*(1/IF_P_Xstar_pi)*A*(Y-IF_P_Xstar_mu1) -
+                                (1/(1-IF_P_Xstar_pi))*(1-A)*(Y-IF_P_Xstar_mu0) ) + (IF_P_Xstar_mu1-IF_P_Xstar_mu0)/IF_P_Xstar_mu1
+  
+  # Fitting model
+  IF_P_Xstar_model = try(nls(
+    IF_P_Xstar_ystar ~ expit(beta1*X1 + beta2*X2 + beta3*X3 + beta4*X4),
+    start=list(beta1=-1, beta2=.5, beta3=-.25, beta4=-.1),
+    data=dff, nls.control(maxiter = 500)
   ), silent=TRUE)
 
   # Getting predicted values
-  mis_gammahat_IF = try(predict(mis_model_IF), silent=TRUE)
+  IF_P_Xstar_gammahat = try(predict(IF_P_Xstar_model), silent=TRUE)
 
   # RMSE
-  RMSE_mis_IF = try(sqrt(samplesize)*sqrt(  mean( (mis_gammahat_IF - gamma)^2 )  ), silent=TRUE)
+  IF_P_Xstar_RMSE = try(sqrt(  mean( (IF_P_Xstar_gammahat - gamma)^2 )  ), silent=TRUE)
+    #try(sqrt(samplesize)*sqrt(  mean( (IF_P_Xstar_gammahat - gamma)^2 )  ), silent=TRUE)
   
   # Show NA if I get an error message
-  RMSE_mis_IF = ifelse(class(RMSE_mis_IF)=="numeric" && RMSE_mis_IF!=Inf, RMSE_mis_IF, NA)
+  IF_P_Xstar_RMSE = ifelse(class(IF_P_Xstar_RMSE)=="numeric" && IF_P_Xstar_RMSE!=Inf, IF_P_Xstar_RMSE, NA)
+
+  
+
+  
+  #  Influence-function-based estimator, estimate nuisance parameters with plugin nonparametric transformed Xs ----
+  #  Defining the nuisance parameters
+  IF_N_Xstar_mu0 = PI_N_X_mu0_hat
+  IF_N_Xstar_mu1 = PI_N_X_mu1_hat
+  IF_N_Xstar_pi = pi
+  
+  # Defining my pseudo-outcome
+  IF_N_Xstar_ystar = (1/IF_N_Xstar_mu1)*( (IF_N_Xstar_mu0/IF_N_Xstar_mu1)*(1/IF_N_Xstar_pi)*A*(Y-IF_N_Xstar_mu1) -
+                                 (1/(1-IF_N_Xstar_pi))*(1-A)*(Y-IF_N_Xstar_mu0) ) + (IF_N_Xstar_mu1-IF_N_Xstar_mu0)/IF_N_Xstar_mu1
+  
+  # Fitting model
+  IF_N_Xstar_model = try(nls(
+    IF_N_Xstar_ystar ~ expit(beta1*X1 + beta2*X2 + beta3*X3 + beta4*X4),
+    start=list(beta1=-1, beta2=.5, beta3=-.25, beta4=-.1),
+    data=dff, nls.control(maxiter = 500)
+  ), silent=TRUE)
+  
+  # Getting predicted values
+  IF_N_Xstar_gammahat = try(predict(IF_N_Xstar_model), silent=TRUE)
+  
+  # RMSE
+  IF_N_Xstar_RMSE = try(sqrt(  mean( (IF_N_Xstar_gammahat - gamma)^2 )  ), silent=TRUE)
+    #try(sqrt(samplesize)*sqrt(  mean( (IF_N_Xstar_gammahat - gamma)^2 )  ), silent=TRUE)
+  
+  # Show NA if I get an error message
+  IF_N_Xstar_RMSE = ifelse(class(IF_N_Xstar_RMSE)=="numeric" && IF_N_Xstar_RMSE!=Inf, IF_N_Xstar_RMSE, NA)
   
   
   
   # Function will return this
-  toreturn = c(RMSE_cor_P_PI, RMSE_mis_P_PI, RMSE_cor_N_PI, RMSE_mis_N_PI, RMSE_cor_IF, RMSE_mis_IF)
+  toreturn = c(PI_P_X_RMSE, PI_P_Xstar_RMSE, PI_N_X_RMSE, PI_N_Xstar_RMSE, 
+               IF_P_Xstar_RMSE, IF_P_X_RMSE, IF_N_Xstar_RMSE)
   return(toreturn)
 }
 
@@ -293,20 +299,25 @@ fun.simulate(500)
 fun.simulate(500)
 fun.simulate(500)
 
+fun.simulate(1000)
+fun.simulate(1000)
+
 barplot(fun.simulate(2000))
 # testing = fun.simulate(1000)
 # barplot(testing)
 # 
-# thelength = length(fun.simulate(1000))
 # 
 # # Repeat simulation for different sample sizes
-samplesizes = c(rep(200, 100), rep(1000, 100), rep(5000, 100))
-samplesizes = c(rep(1000, 15))
+samplesizes = c(rep(200, 10), rep(1000, 10), rep(5000, 10))
+#samplesizes = c(rep(1000, 15))
+
+# thelength = length(fun.simulate(1000))
 
 arr <- array(dim=c(length(samplesizes),thelength+1))
-colnames(arr) <- c("sample_sizes", 
-                   "RMSE_cor_P_PI", "RMSE_mis_P_PI", "RMSE_cor_N_PI", 
-                   "RMSE_mis_N_PI", "RMSE_cor_IF", "RMSE_mis_IF")
+colnames(arr) <- c("sample_sizes", "PI_P_X_RMSE", "PI_P_Xstar_RMSE", 
+                  "PI_N_X_RMSE", "PI_N_Xstar_RMSE", "IF_P_X_RMSE", 
+                  "IF_P_Xstar_RMSE", "IF_N_Xstar_RMSE")
+
 arr[1:length(samplesizes),1] = samplesizes
 arr
 
@@ -319,46 +330,32 @@ for(s in 1:length(samplesizes)){
   arr[s, 5] = fun.results[4]
   arr[s, 6] = fun.results[5]
   arr[s, 7] = fun.results[6]
+  arr[s, 8] = fun.results[7]
 }
 arr
 df.sim = as.data.frame(arr)
 arr1=arr
 
-
 df.sim = as.data.frame(arr)
-colnames(df.sim)[2] = "Plugin_parametric_correctly_specified"
-colnames(df.sim)[3] = "Plugin_parametric_misspecified"
-colnames(df.sim)[4] = "Plugin_nonparametric_untransformed_Xs"
-colnames(df.sim)[5] = "Plugin_nonparametric_transformed_Xs"
-colnames(df.sim)[6] = "Influence_function_untransformed_Xs"
-colnames(df.sim)[7] = "Influence_function_transformed_Xs"
-# Backup table: 
-# df.sim = read.table("/Users/mariacuellar/Desktop/table1.csv", sep=",", header=TRUE)[,2:5]
-# head(df.sim)
+colnames(df.sim)[2] = "Plugin_param_correctly_specified"
+colnames(df.sim)[3] = "Plugin_param_misspecified"
+colnames(df.sim)[4] = "Plugin_nonparam_SVM_untransformed_Xs"
+colnames(df.sim)[5] = "Plugin_nonparam_SVM_transformed_Xs"
+colnames(df.sim)[6] = "Influence_fun_param_GLM_untransformed_Xs"
+colnames(df.sim)[7] = "Influence_fun_param_GLM_transformed_Xs"
+colnames(df.sim)[8] = "Influence_fun_nonparam_SVM_transformed_Xs"
 
 setwd(WD_simulation)
-save(df.sim, file="df.sim.fin-2017-05-16_2.rda")
+save(df.sim, file="df.sim.fin-2017-05-17_1.rda")
 
-# REMOVE OUTLIERS FOR Parametric_misspecified
-df.sim = df.sim[which(df.sim$Parametric_misspecified<0.5),]
+# # REMOVE OUTLIERS FOR Parametric_misspecified
+# df.sim = df.sim[which(df.sim$Parametric_misspecified<0.5),]
 
 
 
 # Alert when it's done running
 beep(1) 
 
-
-# Plotting the RMSE to compare estimators
-mdf = melt(df.sim, id="sample_sizes")
-mdf$Estimator = mdf$variable
-
-setwd(WD_figs)
-pdf(file="20170515_RMSE_comparison.pdf", width=10, height=5)
-ggplot(na.omit(mdf), aes(x = sample_sizes, y=value, color=Estimator)) + geom_point() + 
-  geom_smooth(method = "loess", size = 1.5) +
-  labs(title = "Comparison of four estimators, 100 iterations per sample size", y="Root mean squared error", x="Sample size")
-dev.off()
-View(mdf)
 
 
 # Barplot with error bars
@@ -391,18 +388,33 @@ dfsum$Algorithm = as.factor(dfsum$Algorithm)
 bp = ggplot(dfsum, aes(x=Sample_Size, y=RMSE, fill=Algorithm)) + 
   geom_bar(stat="identity", color="black", position=position_dodge()) +
   geom_errorbar(aes(ymin=RMSE-sd, ymax=RMSE+sd), width=.2, position=position_dodge(.9)) +
-  ggtitle("Plug-in vs. influence-function estimators, 500 iterations per sample size") + xlab("Sample size") + ylab("Rootmean squared error")
+  ggtitle("Plug-in vs. influence-function estimators, 500 iterations per sample size") + xlab("Sample size") + ylab("Root mean squared error")
 
 
 setwd(WD_figs)
-pdf("20170516_Barplot.pdf", width=8, height=3.3)
+pdf("20170517_1_Barplot.pdf", width=8, height=3.3)
 bp + scale_fill_brewer(palette="Paired")
 dev.off()
 
 # Nice colors
 bp + scale_fill_manual(values=wes_palette(n=3, name="GrandBudapest"))
 bp + scale_fill_brewer(palette="Paired")
-.
+
+
+
+
+
+
+# Plotting the RMSE to compare estimators
+mdf = melt(df.sim, id="sample_sizes")
+mdf$Estimator = mdf$variable
+
+setwd(WD_figs)
+pdf(file="20170517_RMSE_comparison.pdf", width=10, height=5)
+ggplot(na.omit(mdf), aes(x = sample_sizes, y=value, color=Estimator)) + geom_point() + 
+  geom_smooth(method = "loess", size = 1.5) +
+  labs(title = "Comparison of four estimators, 100 iterations per sample size", y="Root mean squared error", x="Sample size")
+dev.off()
 
 
 
@@ -410,30 +422,6 @@ bp + scale_fill_brewer(palette="Paired")
 
 
 # FITTING OTHER NONPARAMETRIC PLUG IN ESTIMATORS
-
-
-
-#   
-#   # Correctly specified model: NONparametric plug-in (P_PI) estimator:
-#   # Kernel----
-#   # Fitting model, a bit faster than without tol, ftol, but still slow
-#   # got bandwidths from running it once on a sample of the data
-#   cor_N_PI_mu0k = npreg(Y~X1+X2+X3+X4, data = dff[which(dff$A==0),], tol=0.1, ftol=0.1, 
-#                         bws=c(25156071.0125331692, 0.6231756800, 0.9547994939, 0.2197950283))
-#   
-#   cor_N_PI_mu1k = npreg(Y~X1+X2+X3+X4, data = dff[which(dff$A==1),], tol=0.1, ftol=0.1, 
-#                         bws=c(1063281.762, 2113100.136, 2943341.821, 1139805.992))
-#   
-#   # Getting fitted values
-#   cor_N_PI_mu0_hatk = predict(cor_N_PI_mu0k, newdata = dff)#$mean # with faster kernel
-#   cor_N_PI_mu1_hatk = predict(cor_N_PI_mu1k, newdata = dff)#$mean
-#   
-#   # Gamma hat
-#   cor_N_PI_gammahatk = (cor_N_PI_mu1_hatk - cor_N_PI_mu0_hatk)/cor_N_PI_mu1_hatk
-#   
-#   # RMSE 
-#   RMSE_cor_N_PIk = sqrt(  mean( (cor_N_PI_gammahatk - gamma)^2 )  ) # 0.2458764
-#   RMSE_cor_N_PI = RMSE_cor_N_PIk
 
 
 
@@ -517,26 +505,26 @@ bp + scale_fill_brewer(palette="Paired")
 
 
 
-#   # Ranger---- 
-#   # Fitting model
-#   mis_N_PI_mu0r = ranger(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==0),])
-#   mis_N_PI_mu1r = ranger(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==1),])
-#   
-#   # Getting fitted values (after inverse link function)  
-#   mis_N_PI_mu0_hatr = expit(predict(mis_N_PI_mu0r, data=dff)[1][[1]])
-#   mis_N_PI_mu1_hatr = expit(predict(mis_N_PI_mu1r, data=dff)[1][[1]])
-#   
-#   # Gamma hat
-#   mis_N_PI_gammahatr = (mis_N_PI_mu1_hatr - mis_N_PI_mu0_hatr)/mis_N_PI_mu1_hatr
-#   
-#   # RMSE
-#   RMSE_mis_N_PIr = sqrt(  mean( (mis_N_PI_gammahatr - gamma)^2 )  )
-#   
+  # # Ranger----
+  # # Fitting model
+  # mis_N_PI_mu0r = ranger(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==0),])
+  # mis_N_PI_mu1r = ranger(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==1),])
+  # 
+  # # Getting fitted values (after inverse link function)
+  # mis_N_PI_mu0_hatr = expit(predict(mis_N_PI_mu0r, data=dff)[1][[1]])
+  # mis_N_PI_mu1_hatr = expit(predict(mis_N_PI_mu1r, data=dff)[1][[1]])
+  # 
+  # # Gamma hat
+  # mis_N_PI_gammahatr = (mis_N_PI_mu1_hatr - mis_N_PI_mu0_hatr)/mis_N_PI_mu1_hatr
+  # 
+  # # RMSE
+  # RMSE_mis_N_PIr = sqrt(  mean( (mis_N_PI_gammahatr - gamma)^2 )  )
 
 
 
 
-# SuperLearner----
+
+# # SuperLearner----
 #   SL.ranger <- function (Y, X, newX, family, ...) { require("ranger")
 #                                                   fit.rf <- ranger::ranger(Y ~ ., data=X); pred <- predict(fit.rf,data=newX)$predictions
 #                                                   fit <- list(object = fit.rf); out <- list(pred = pred, fit = fit)
@@ -550,14 +538,14 @@ bp + scale_fill_brewer(palette="Paired")
 # data0 = dff[which(dff$A==0),] # need to put data into superlearner as df
 # data1 = dff[which(dff$A==1),]
 # 
-# mis_N_PI_mu0SL = SuperLearner(Y=data0$Y, X=as.data.frame(cbind(data0$X1star,data0$X2star,data0$X3star,data0$X4star)), 
+# mis_N_PI_mu0SL = SuperLearner(Y=data0$Y, X=as.data.frame(cbind(data0$X1star,data0$X2star,data0$X3star,data0$X4star)),
 #                               SL.library = sl.lib2, family=binomial())
-# mis_N_PI_mu1SL = SuperLearner(Y=data1$Y, X=as.data.frame(cbind(data1$X1star,data1$X2star,data1$X3star,data1$X4star)), 
+# mis_N_PI_mu1SL = SuperLearner(Y=data1$Y, X=as.data.frame(cbind(data1$X1star,data1$X2star,data1$X3star,data1$X4star)),
 #                               SL.library = sl.lib2, family=binomial())
 # 
-# # Getting fitted values (after inverse link function?) 
-# mis_N_PI_mu0_hatSL = predict(mis_N_PI_mu0SL, newdata=as.data.frame(cbind(dff$X1star,dff$X2star,dff$X3star,dff$X4star)))$pred
-# mis_N_PI_mu1_hatSL = predict(mis_N_PI_mu1SL, newdata=as.data.frame(cbind(dff$X1star,dff$X2star,dff$X3star,dff$X4star)))$pred
+# # Getting fitted values (after inverse link function?)
+# mis_N_PI_mu0_hatSL = predict(mis_N_PI_mu0SL, newdata=as.data.frame(cbind(dff$X1star,dff$X2star,dff$X3star,dff$X4star)))$library.predict[,2]
+# mis_N_PI_mu1_hatSL = predict(mis_N_PI_mu1SL, newdata=as.data.frame(cbind(dff$X1star,dff$X2star,dff$X3star,dff$X4star)))$library.predict[,2]
 # 
 # # Gamma hat
 # mis_N_PI_gammahatSL = (mis_N_PI_mu1_hatSL - mis_N_PI_mu0_hatSL)/mis_N_PI_mu1_hatSL
@@ -602,21 +590,21 @@ bp + scale_fill_brewer(palette="Paired")
 #   
 #   
 #   
-# Support vector machine----
-# Fitting model:
-cor_N_PI_mu0svm = svm(Y~X1+X2+X3+X4, data = dff[which(dff$A==0),])
-cor_N_PI_mu1svm = svm(Y~X1+X2+X3+X4, data = dff[which(dff$A==1),])
-
-# Getting predicted values
-cor_N_PI_mu0_hatsvm = expit(predict(cor_N_PI_mu0svm, newdata = dff))
-cor_N_PI_mu1_hatsvm = expit(predict(cor_N_PI_mu1svm, newdata = dff))
-
-# Gamma hat
-cor_N_PI_gammahatsvm = (cor_N_PI_mu1_hatsvm - cor_N_PI_mu0_hatsvm)/cor_N_PI_mu1_hatsvm
-
-# RMSE
-RMSE_cor_N_PIsvm = sqrt(  mean( (cor_N_PI_gammahatsvm - gamma)^2 )  ) # 0.3977806
-RMSE_cor_N_PI = RMSE_cor_N_PIsvm
+# # Support vector machine----
+# # Fitting model:
+# cor_N_PI_mu0svm = svm(Y~X1+X2+X3+X4, data = dff[which(dff$A==0),])
+# cor_N_PI_mu1svm = svm(Y~X1+X2+X3+X4, data = dff[which(dff$A==1),])
+# 
+# # Getting predicted values
+# cor_N_PI_mu0_hatsvm = expit(predict(cor_N_PI_mu0svm, newdata = dff))
+# cor_N_PI_mu1_hatsvm = expit(predict(cor_N_PI_mu1svm, newdata = dff))
+# 
+# # Gamma hat
+# cor_N_PI_gammahatsvm = (cor_N_PI_mu1_hatsvm - cor_N_PI_mu0_hatsvm)/cor_N_PI_mu1_hatsvm
+# 
+# # RMSE
+# RMSE_cor_N_PIsvm = sqrt(  mean( (cor_N_PI_gammahatsvm - gamma)^2 )  ) # 0.3977806
+# RMSE_cor_N_PI = RMSE_cor_N_PIsvm
 
 
 # 
@@ -674,3 +662,84 @@ RMSE_cor_N_PI = RMSE_cor_N_PIsvm
 # # RMSE
 # RMSE_mis_N_PIr = sqrt(  mean( (mis_N_PI_gammahatr - gamma)^2 )  )
 # RMSE_mis_N_PI = RMSE_mis_N_PIr
+
+
+
+
+# # Correctly specified model: NONparametric plug-in (P_PI) estimator:
+# # RandomForest----
+# # Fitting model
+# cor_N_PI_mu0rf = randomForest(Y~X1+X2+X3+X4, data = dff[which(dff$A==0),], type=regression)
+# cor_N_PI_mu1rf = randomForest(Y~X1+X2+X3+X4, data = dff[which(dff$A==1),], type=regression)
+# 
+# # Getting fitted values (after inverse link function)
+# cor_N_PI_mu0_hatrf = as.numeric(expit(predict(cor_N_PI_mu0rf, newdata=dff))) # with random forest
+# cor_N_PI_mu1_hatrf = as.numeric(expit(predict(cor_N_PI_mu1rf, newdata=dff)))
+# 
+# # Gamma hat
+# cor_N_PI_gammahatrf = (cor_N_PI_mu1_hatrf - cor_N_PI_mu0_hatrf)/cor_N_PI_mu1_hatrf
+# plot(cor_N_PI_gammahatrf, gamma)
+# # RMSE
+# RMSE_cor_N_PIrf = sqrt(samplesize)*sqrt(  mean( (cor_N_PI_gammahatrf - gamma)^2 )  ) # 0.4826061
+# RMSE_cor_N_PI = RMSE_cor_N_PIrf
+# 
+# 
+# 
+# # Misspecified model: NONparametric plug-in (P_PI) estimator:
+# # RandomForest----
+# # Fitting model
+# mis_N_PI_mu0rf = randomForest(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==0),], type=regression)
+# mis_N_PI_mu1rf = randomForest(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==1),], type=regression)
+# 
+# # Getting fitted values (after inverse link function)
+# mis_N_PI_mu0_hatrf = as.numeric(expit(predict(mis_N_PI_mu0rf, newdata=dff))) # with random forest
+# mis_N_PI_mu1_hatrf = as.numeric(expit(predict(mis_N_PI_mu1rf, newdata=dff)))
+# #
+# # Gamma hat
+# mis_N_PI_gammahatrf = (mis_N_PI_mu1_hatrf - mis_N_PI_mu0_hatrf)/mis_N_PI_mu1_hatrf
+# 
+# # RMSE
+# RMSE_mis_N_PIrf = sqrt(samplesize)*sqrt(  mean( (mis_N_PI_gammahatrf - gamma)^2 )  ) # 0.4826061
+# RMSE_mis_N_PI = RMSE_mis_N_PIrf
+
+
+
+
+
+# # Kernel. Got bandwidths from running it once on a sample of the data
+# PI_N_Xstar_mu0 = npreg(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==0),], tol=0.1, ftol=0.1,
+#                       bws=c(5229101.686, 590245.5023, 0.02962718249, 46.19266321))
+# 
+# PI_N_Xstar_mu1 = npreg(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==1),], tol=0.1, ftol=0.1,
+#                       bws=c(0.8807241131, 3242719.391, 0.0643948029, 85037300.36))
+# 
+# # Getting fitted values
+# PI_N_Xstar_mu0_hat = predict(PI_N_Xstar_mu0, newdata = dff)#$mean # with faster kernel
+# PI_N_Xstar_mu1_hat = predict(PI_N_Xstar_mu1, newdata = dff)#$mean
+# 
+# # Gamma hat
+# PI_N_Xstar_gammahat = (PI_N_Xstar_mu1_hat - PI_N_Xstar_mu0_hat)/PI_N_Xstar_mu1_hat
+# 
+# # RMSE
+# PI_N_Xstar_RMSE = sqrt(  mean( (PI_N_Xstar_gammahat - gamma)^2 )  ) # 0.2458764
+
+
+
+
+# 
+# # Kernel. Got bandwidths from running it once on a sample of the data
+# PI_N_X_mu0 = npreg(Y~X1+X2+X3+X4, data = dff[which(dff$A==0),], tol=0.1, ftol=0.1,
+#                       bws=c(10263069, 13280958, 0.3782153, 0.4474266))
+# 
+# PI_N_X_mu1 = npreg(Y~X1+X2+X3+X4, data = dff[which(dff$A==1),], tol=0.1, ftol=0.1,
+#                       bws=c(2850532, 0.953212, 8485719, 0.7261236))
+# 
+# # Getting fitted values
+# PI_N_X_mu0_hat = predict(PI_N_X_mu0, newdata = dff)
+# PI_N_X_mu1_hat = predict(PI_N_X_mu1, newdata = dff)
+# 
+# # Gamma hat
+# PI_N_X_gammahat = (PI_N_X_mu1_hat - PI_N_X_mu0_hat)/PI_N_X_mu1_hat
+# 
+# # RMSE
+# PI_N_X_mu1_RMSE = sqrt(  mean( (PI_N_X_gammahat - gamma)^2 )  )
