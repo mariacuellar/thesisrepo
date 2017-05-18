@@ -469,6 +469,8 @@ dfsum = data_summary(data = dat, varname = "RMSE", groupnames = c("Sample_Size",
 dfsum$Algorithm = as.factor(dfsum$Algorithm)
 dfsum$theindex = 1:dim(dfsum)[1]
 dfsum$bias = ifelse(dfsum$theindex %in% grep("bias", dfsum$Algorithm), "Bias", "RMSE")
+dfsum$bias = as.factor(dfsum$bias)
+#dfsum$bias = factor(dfsum$bias,c("RMSE","Bias"))
 dfsum$Algorithm_type = ifelse(dfsum$theindex %in% grep("Plugin", dfsum$Algorithm), "Plugin", "Proposed")
 dfsum$cormispnp = 0
 dfsum$cormispnp = ifelse((str_detect(dfsum$Algorithm, "cor")& str_detect(dfsum$Algorithm, "param")), "Cor P", dfsum$cormispnp)
@@ -486,7 +488,7 @@ bp = ggplot(dfsum, aes(x=cormispnp, y=RMSE, fill=Algorithm_type)) +
   ggtitle("Plug-in vs. influence-function estimators, 20 iterations per sample size") + xlab("Sample size") + ylab("")
 
 setwd(WD_figs)
-pdf("20170518_Barplot.pdf", width=12, height=8)
+pdf("20170518_short_Barplot.pdf", width=10, height=5)
 bp + facet_grid(bias ~ Sample_Size,scales = "free_y", switch = "y") + scale_fill_brewer(palette="Paired") + theme_bw()
 dev.off()
 
