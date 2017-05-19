@@ -20,27 +20,32 @@
 # install.packages("earth")
 # install.packages("wesanderson")
 # install.packages("minpack.lm")
-# 
-# 
-# library(clusterPower) # lets me use expit function
-# library(dplyr) # lets me use sample_n function
-# library(hydroGOF) # lets me use rmse function
-# library(np) # lets me use nonparametric models, like kernel (https://cran.r-project.org/web/packages/np/np.pdf)
-# library(randomForest) # lets me do random forests
-# library(ranger)# lets me do random forests
-# library(e1071) # support vector machine
-# library(neuralnet)
-# library(reshape)
-# library(ggplot2)
-# library(tree)
-# library(stats) # for nls
-# library(SuperLearner)
-# library(polspline)
-# library(gbm)
-# library(glmnet)
-# library(earth)
-# library(wesanderson)
-# library(minpack.lm) # different type of nls
+# install.packages("e1071")
+# install.packages("reshape")
+# install.packages("stringr")
+
+library(clusterPower) # lets me use expit function
+library(dplyr) # lets me use sample_n function
+library(hydroGOF) # lets me use rmse function
+library(np) # lets me use nonparametric models, like kernel (https://cran.r-project.org/web/packages/np/np.pdf)
+library(randomForest) # lets me do random forests
+library(ranger)# lets me do random forests
+library(e1071) # support vector machine
+library(neuralnet)
+library(reshape)
+library(ggplot2)
+library(tree)
+library(stats) # for nls
+library(SuperLearner)
+library(polspline)
+library(gbm)
+library(glmnet)
+library(earth)
+library(wesanderson)
+library(minpack.lm) # different type of nls
+library(e1071)
+library(reshape)
+library(stringr)
 
 
 # Turn off warnings
@@ -129,8 +134,9 @@ fun.simulate = function(samplesize){
   #sqrt(samplesize)*sqrt(  mean( (PI_P_X_gammahat - gamma)^2 )  ) # 0.310089068
   
   # Bias
-  PI_P_X_bias = (mean(PI_P_X_gammahat - gamma))^2
+  PI_P_X_bias = mean(abs(PI_P_X_gammahat - gamma))
   
+
   
   
   # Plug-in, parametric, transformed X's (misspecified model)
@@ -149,7 +155,7 @@ fun.simulate = function(samplesize){
   #sqrt(samplesize)*sqrt(  mean( (PI_P_Xstar_gammahat - gamma)^2 )  ) # 0.2617908249
   
   # Bias
-  PI_P_Xstar_bias = (mean(PI_P_Xstar_gammahat - gamma))^2
+  PI_P_Xstar_bias = mean(abs(PI_P_Xstar_gammahat - gamma))
   
   
   
@@ -173,7 +179,7 @@ fun.simulate = function(samplesize){
   #sqrt(samplesize)*sqrt(  mean( (PI_N_X_gammahat - gamma)^2 )  )
   
   # Bias
-  PI_N_X_bias = (mean(PI_N_X_gammahat - gamma))^2
+  PI_N_X_bias = mean(abs(PI_N_X_gammahat - gamma))
   
   
   
@@ -195,7 +201,7 @@ fun.simulate = function(samplesize){
   #sqrt(samplesize)*sqrt(  mean( (PI_N_Xstar_gammahat - gamma)^2 )  )
   
   # Bias
-  PI_N_Xstar_bias = (mean(PI_N_Xstar_gammahat - gamma))^2
+  PI_N_Xstar_bias = mean(abs(PI_N_Xstar_gammahat - gamma))
   
   # Show NA if I get an error message
   PI_N_Xstar_bias = ifelse(class(PI_N_Xstar_bias)=="numeric" && PI_N_Xstar_bias!=Inf, PI_N_Xstar_bias, NA)
@@ -231,7 +237,7 @@ fun.simulate = function(samplesize){
   IF_P_X_RMSE = ifelse(class(IF_P_X_RMSE)=="numeric", IF_P_X_RMSE, NA)
   
   # Bias
-  IF_P_X_bias = try( (mean(IF_P_X_gammahat-gamma))^2 , silent=TRUE)
+  IF_P_X_bias = try( mean(abs(IF_P_X_gammahat - gamma)) , silent=TRUE)
   
   # Show NA if I get an error message
   IF_P_X_bias = ifelse(class(IF_P_X_bias)=="numeric" && IF_P_X_bias!=Inf, IF_P_X_bias, NA)
@@ -267,7 +273,7 @@ fun.simulate = function(samplesize){
   IF_N_X_RMSE = ifelse(class(IF_N_X_RMSE)=="numeric", IF_N_X_RMSE, NA)
   
   # Bias
-  IF_N_X_bias = try( (mean(IF_N_X_gammahat-gamma))^2 , silent=TRUE)
+  IF_N_X_bias = try( mean(abs(IF_N_X_gammahat - gamma)) , silent=TRUE)
   
   # Show NA if I get an error message
   IF_N_X_bias = ifelse(class(IF_N_X_bias)=="numeric" && IF_N_X_bias!=Inf, IF_N_X_bias, NA)
@@ -303,7 +309,7 @@ fun.simulate = function(samplesize){
   IF_P_Xstar_RMSE = ifelse(class(IF_P_Xstar_RMSE)=="numeric" && IF_P_Xstar_RMSE!=Inf, IF_P_Xstar_RMSE, NA)
   
   # Bias
-  IF_P_Xstar_bias = try( (mean(IF_P_Xstar_gammahat-gamma))^2 , silent=TRUE)
+  IF_P_Xstar_bias = try( mean(abs(IF_P_Xstar_gammahat - gamma)) , silent=TRUE)
   
   # Show NA if I get an error message
   IF_P_Xstar_bias = ifelse(class(IF_P_Xstar_bias)=="numeric" && IF_P_Xstar_bias!=Inf, IF_P_Xstar_bias, NA)
@@ -339,11 +345,10 @@ fun.simulate = function(samplesize){
   IF_N_Xstar_RMSE = ifelse(class(IF_N_Xstar_RMSE)=="numeric" && IF_N_Xstar_RMSE!=Inf, IF_N_Xstar_RMSE, NA)
   
   # Bias
-  IF_N_Xstar_bias = try( (mean(IF_N_Xstar_gammahat-gamma))^2 , silent=TRUE)
+  IF_N_Xstar_bias = try( mean(abs(IF_N_Xstar_gammahat - gamma)) , silent=TRUE)
   
   # Show NA if I get an error message
   IF_N_Xstar_bias = ifelse(class(IF_N_Xstar_bias)=="numeric" && IF_N_Xstar_bias!=Inf, IF_N_Xstar_bias, NA)
-  
   
   
   
@@ -356,32 +361,29 @@ fun.simulate = function(samplesize){
   return(toreturn)
 }
 
-# 
-# 
-# fun.simulate(200)
-# fun.simulate(200)
-# fun.simulate(200)
-# fun.simulate(200)
-# 
-# fun.simulate(500)
-# fun.simulate(500)
-# fun.simulate(500)
-# fun.simulate(500)
-# 
-# fun.simulate(1000)
-# fun.simulate(1000)
-# 
-# barplot(fun.simulate(2000))
-# testing = fun.simulate(1000)
-# barplot(testing)
-# 
+
+fun.simulate(200)
+fun.simulate(200)
+fun.simulate(200)
+fun.simulate(200)
+
+fun.simulate(500)
+fun.simulate(500)
+fun.simulate(500)
+fun.simulate(500)
+
+fun.simulate(1000)
+fun.simulate(1000)
+
+barplot(fun.simulate(2000))
+
 # 
 # # Repeat simulation for different sample sizes
 samplesizes = c(rep(500, 10), rep(1000, 10), rep(10000, 10))
 #samplesizes = c(rep(1000, 10), rep(2000, 10))
 
 
-# thelength = length(fun.simulate(1000))
+ thelength = length(fun.simulate(1000))
 
 arr <- array(dim=c(length(samplesizes),thelength+1))
 colnames(arr) <- c("sample_sizes", 
@@ -423,7 +425,7 @@ colnames(df.sim)[17] = "Influence_fun_nonp_mis_bias"
 
 
 setwd(WD_simulation)
-save(df.sim, file="df.sim.fin-2017-05-18.rda")
+save(df.sim, file="df.sim.fin-2017-05-19.rda")
 
 
 
@@ -431,6 +433,7 @@ save(df.sim, file="df.sim.fin-2017-05-18.rda")
 # df.sim = df.sim[which(df.sim$Parametric_misspecified<0.5),]
 
 head(df.sim)
+
 
 
 # Alert when it's done running
@@ -479,6 +482,7 @@ dfsum$cormispnp = ifelse((str_detect(dfsum$Algorithm, "cor")& str_detect(dfsum$A
 dfsum$cormispnp = ifelse((str_detect(dfsum$Algorithm, "mis")& str_detect(dfsum$Algorithm, "nonp")), "Mis NP", dfsum$cormispnp)
 dfsum$cormispnp = as.factor(dfsum$cormispnp)
 dfsum$cormispnp = factor(dfsum$cormispnp,c("Cor P","Mis P","Cor NP", "Mis NP"))
+#str_detect( str, "cor[\\s\\S]*param")
 
 
 
@@ -488,7 +492,7 @@ bp = ggplot(dfsum, aes(x=cormispnp, y=RMSE, fill=Algorithm_type)) +
   ggtitle("Plug-in vs. influence-function estimators, 20 iterations per sample size") + xlab("Sample size") + ylab("")
 
 setwd(WD_figs)
-pdf("20170518_short_Barplot.pdf", width=10, height=5)
+pdf("20170519_Barplot.pdf", width=10, height=5)
 bp + facet_grid(bias ~ Sample_Size,scales = "free_y", switch = "y") + scale_fill_brewer(palette="Paired") + theme_bw()
 dev.off()
 
