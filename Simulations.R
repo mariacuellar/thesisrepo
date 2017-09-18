@@ -3,9 +3,9 @@
 # # Making my own simulation for the parameter of interest: PC = gamma = 1-1/RR = 1-mu0/mu1.
 # 
 # # define working directory
-# WD_figs = "/home/mcuellar"
-# WD_thesis = "/home/mcuellar/Thesis"
-# WD_simulation = "/home/mcuellar/Thesis"
+WD_figs = "/home/mcuellar"
+WD_thesis = "/home/mcuellar/Thesis"
+WD_simulation = "/home/mcuellar/Thesis"
 # 
 # install.packages("np")
 # install.packages("beepr")
@@ -24,6 +24,8 @@
 # install.packages("reshape")
 # install.packages("stringr")
 # install.packages("ggthemes")
+# install.packages('<R-package-file>')
+# install.packages('boot')
 
 
 # library(clusterPower) # lets me use expit function
@@ -49,7 +51,7 @@
 # library(reshape)
 # library(stringr)
 # library('ggthemes')
-
+# library(boot)
 
 # Turn off warnings
 #options(warn=-1)
@@ -62,7 +64,7 @@
 
 # Function to simulate estimation of PC (gamma) as plugin, nonparametric, parametric IF, and nonparametric IF
 
-samplesize = 200 # test
+samplesize = 2000 # test
 fun.simulate = function(samplesize){
 # set.seed(400) # seed for random number generator
 # let us know how far it's gone
@@ -92,7 +94,7 @@ beta = 0.5
 mu0 = beta/(1+exp(-X1+0.5*X2-0.25*X3-0.1*X4))
 mu1 = rep(beta, samplesize)
 #gamma = 1 - mu0/mu1
-gamma = expit(-X1+0.5*X2-0.25*X3-0.1*X4) # Don't we need to make it so that gamma is equal to 1-mu0/mu1??
+gamma = expit(-X1+0.5*X2-0.25*X3-0.1*X4) # Don't we need to make it so that gamma is equal to 1-mu0/mu1?? It is.
 
 # generate data frame
 df = as.data.frame(cbind(index, X1, X2, X3, X4, X1star, X2star, X3star, X4star, pi, gamma, A, Y1))
@@ -139,6 +141,32 @@ PI_P_X_RMSE = sqrt(  mean( (PI_P_X_gammahat - gamma)^2 )  ) # 0.310089068
 # Bias
 PI_P_X_bias = mean(abs(PI_P_X_gammahat - gamma))
 
+# Coverage 
+
+# # Bootstrap
+# PI_P_X_bootreps = 1000
+# PI_P_X_bootvec <- 0
+# for(i in 1:PI_P_X_bootreps){
+#   PI_P_X_mu0_hat_sample = sample(PI_P_X_mu0_hat, size = samplesize, replace = TRUE)
+#   PI_P_X_mu1_hat_sample = sample(PI_P_X_mu1_hat, size = samplesize, replace = TRUE)
+#   PI_P_X_gammahat_sample = (PI_P_X_mu1_hat_sample-PI_P_X_mu0_hat_sample)/PI_P_X_mu1_hat_sample
+#   PI_P_X_bootvec[i] <- PI_P_X_gammahat_sample
+# }
+
+# Standard error
+#PI_P_X_gammahat_sd = sd(PI_P_X_bootvec) # bootstrap
+PI_P_X_gammahat_sd = sqrt( mean((PI_P_X_gammahat - mean(PI_P_X_gammahat))^2) ) # definition of variance
+
+# Confidence interval
+PI_P_X_ci_lb = mean(PI_P_X_gammahat) - 2*PI_P_X_gammahat_sd / sqrt(samplesize)
+PI_P_X_ci_ub = mean(PI_P_X_gammahat) + 2*PI_P_X_gammahat_sd / sqrt(samplesize)
+#PI_P_X_ci = c(PI_P_X_ci_lb, PI_P_X_ci_ub)
+PI_P_X_ci = paste(PI_P_X_ci_lb, PI_P_X_ci_ub, sep=", ")
+
+# # Coverage
+# PI_P_X_coverage = length(which( dff$gamma >= PI_P_X_ci_lb & dff$gamma <= PI_P_X_ci_ub ))/samplesize
+
+
 
 
 
@@ -159,6 +187,33 @@ PI_P_Xstar_RMSE = sqrt(  mean( (PI_P_Xstar_gammahat - gamma)^2 )  ) # 0.26179082
 
 # Bias
 PI_P_Xstar_bias = mean(abs(PI_P_Xstar_gammahat - gamma))
+
+# Coverage
+
+# # Bootstrap
+# PI_P_Xstar_bootreps = 1000
+# PI_P_Xstar_bootvec <- 0
+# for(i in 1:PI_P_Xstar_bootreps){
+#   PI_P_Xstar_mu0_hat_sample = sample(PI_P_Xstar_mu0_hat, size = samplesize, replace = TRUE)
+#   PI_P_Xstar_mu1_hat_sample = sample(PI_P_Xstar_mu1_hat, size = samplesize, replace = TRUE)
+#   PI_P_Xstar_gammahat_sample = (PI_P_Xstar_mu1_hat_sample-PI_P_Xstar_mu0_hat_sample)/PI_P_Xstar_mu1_hat_sample
+#   PI_P_Xstar_bootvec[i] <- PI_P_Xstar_gammahat_sample
+# }
+
+# Standard error
+#PI_P_Xstar_gammahat_sd = sd(PI_P_Xstar_bootvec) # bootstrap
+PI_P_Xstar_gammahat_sd = sqrt( mean((PI_P_Xstar_gammahat - mean(PI_P_Xstar_gammahat))^2) ) # definition of variance
+
+# Confidence interval
+PI_P_Xstar_ci_lb = mean(PI_P_Xstar_gammahat) - 2*PI_P_Xstar_gammahat_sd / sqrt(samplesize)
+PI_P_Xstar_ci_ub = mean(PI_P_Xstar_gammahat) + 2*PI_P_Xstar_gammahat_sd / sqrt(samplesize)
+#PI_P_Xstar_ci = c(PI_P_Xstar_ci_lb, PI_P_Xstar_ci_ub)
+PI_P_Xstar_ci = paste(PI_P_Xstar_ci_lb, PI_P_Xstar_ci_ub, sep=", ")
+
+# # Coverage
+# PI_P_Xstar_coverage = length(which( dff$gamma >= PI_P_Xstar_ci_lb & dff$gamma <= PI_P_Xstar_ci_ub ))/samplesize
+
+
 
 
 
@@ -181,6 +236,14 @@ PI_N_X_RMSE = sqrt(  mean( (PI_N_X_gammahat - gamma)^2 )  )
 
 # Bias
 PI_N_X_bias = mean(abs(PI_N_X_gammahat - gamma))
+
+# Confidence interval
+# # No valid confidence interval here.
+PI_N_X_ci = NA
+
+# # Coverage
+# # No valid confidence interval here.
+# PI_N_X_coverage = NA
 
 
 
@@ -206,6 +269,7 @@ PI_N_X_bias = mean(abs(PI_N_X_gammahat - gamma))
 
 
 
+
 # Plug-in, nonparametric, transformed X's estimator:
 
 # RandomForest----
@@ -226,7 +290,15 @@ PI_N_Xstar_RMSE = sqrt(  mean( (PI_N_Xstar_gammahat - gamma)^2 )  )
 # Bias
 PI_N_Xstar_bias = mean(abs(PI_N_Xstar_gammahat - gamma))
 
-# 
+# Confidence interval
+# No valid confidence interval here.
+PI_N_Xstar_ci = NA
+
+# # Coverage
+# PI_N_Xstar_coverage = NA
+
+
+
 # # Fitting model:
 # PI_N_Xstar_mu0 = svm(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==0),])
 # PI_N_Xstar_mu1 = svm(Y~X1star+X2star+X3star+X4star, data = dff[which(dff$A==1),])
@@ -264,9 +336,13 @@ IF_P_X_ystar = (1/IF_P_X_mu1)*((IF_P_X_mu0/IF_P_X_mu1)*(1/IF_P_X_pi)*A*(Y-IF_P_X
 # Fitting model
 IF_P_X_model = try(nls(
   IF_P_X_ystar ~ expit(beta1*X1 + beta2*X2 + beta3*X3 + beta4*X4),
-  start=list(beta1=-1, beta2=.5, beta3=-.25, beta4=-.1),
-  data=dff, nls.control(maxiter = 500)
-), silent=TRUE)
+  start=list(beta1=0, beta2=0, beta3=0, beta4=0),
+  lower=c(-2, -2, -2, -2),
+  upper=c(2, 2, 2, 2),
+  algorithm="port",
+  data=dff, nls.control(maxiter = 500))
+  , silent=TRUE)
+
 
 # Getting predicted values
 IF_P_X_gammahat = try(predict(IF_P_X_model), silent=TRUE)
@@ -284,6 +360,21 @@ IF_P_X_bias = try( mean(abs(IF_P_X_gammahat - gamma)) , silent=TRUE)
 # Show NA if I get an error message
 IF_P_X_bias = ifelse(class(IF_P_X_bias)=="numeric" && IF_P_X_bias!=Inf, IF_P_X_bias, NA)
 
+# Coverage
+
+# Standard error
+IF_P_X_gammahat_sd = sqrt( mean( IF_P_X_ystar*t(IF_P_X_ystar) ) ) # I think I'm missing something here. 
+
+# Confidence interval
+IF_P_X_ci_lb = mean(IF_P_X_gammahat) - 2*IF_P_X_gammahat_sd / sqrt(samplesize)
+IF_P_X_ci_ub = mean(IF_P_X_gammahat) + 2*IF_P_X_gammahat_sd / sqrt(samplesize)
+#IF_P_X_ci = c(IF_P_X_ci_lb, IF_P_X_ci_ub)
+IF_P_X_ci = paste(IF_P_X_ci_lb, IF_P_X_ci_ub, sep=", ")
+
+# # Coverage
+# IF_P_X_coverage = length(which( dff$gamma >= IF_P_X_ci_lb & dff$gamma <= IF_P_X_ci_ub ))/samplesize
+
+
 
 
 
@@ -300,9 +391,12 @@ IF_N_X_ystar = (1/IF_N_X_mu1)*((IF_N_X_mu0/IF_N_X_mu1)*(1/IF_N_X_pi)*A*(Y-IF_N_X
 # Fitting model
 IF_N_X_model = try(nls(
   IF_N_X_ystar ~ expit(beta1*X1 + beta2*X2 + beta3*X3 + beta4*X4),
-  start=list(beta1=-1, beta2=.5, beta3=-.25, beta4=-.1),
-  data=dff, nls.control(maxiter = 500)
-), silent=TRUE)
+  start=list(beta1=0, beta2=0, beta3=0, beta4=0),
+  lower=c(-2, -2, -2, -2),
+  upper=c(2, 2, 2, 2),
+  algorithm="port",
+  data=dff, nls.control(maxiter = 500))
+  , silent=TRUE)
 
 # Getting predicted values
 IF_N_X_gammahat = try(predict(IF_N_X_model), silent=TRUE)
@@ -320,6 +414,18 @@ IF_N_X_bias = try( mean(abs(IF_N_X_gammahat - gamma)) , silent=TRUE)
 # Show NA if I get an error message
 IF_N_X_bias = ifelse(class(IF_N_X_bias)=="numeric" && IF_N_X_bias!=Inf, IF_N_X_bias, NA)
 
+# Confidence interval
+IF_N_X_gammahat_sd = sqrt( mean(IF_N_X_ystar*t(IF_N_X_ystar)) ) # I think I'm missing something here. 
+
+IF_N_X_ci_lb = mean(IF_N_X_gammahat) - 2*IF_N_X_gammahat_sd / sqrt(samplesize)
+IF_N_X_ci_ub = mean(IF_N_X_gammahat) + 2*IF_N_X_gammahat_sd / sqrt(samplesize)
+#IF_N_X_ci = c(IF_N_X_ci_lb, IF_N_X_ci_ub)
+IF_N_X_ci = paste(IF_N_X_ci_lb, IF_N_X_ci_ub, sep=", ")
+
+# # Coverage
+# IF_N_X_coverage = length(which( dff$gamma >= IF_N_X_ci_lb & dff$gamma <= IF_N_X_ci_ub ))/samplesize
+
+
 
 
 
@@ -334,11 +440,14 @@ IF_P_Xstar_ystar = (1/IF_P_Xstar_mu1)*( (IF_P_Xstar_mu0/IF_P_Xstar_mu1)*(1/IF_P_
                                           (1/(1-IF_P_Xstar_pi))*(1-A)*(Y-IF_P_Xstar_mu0) ) + (IF_P_Xstar_mu1-IF_P_Xstar_mu0)/IF_P_Xstar_mu1
 
 # Fitting model
-IF_P_Xstar_model = try(nls(
-  IF_P_Xstar_ystar ~ expit(beta1*X1 + beta2*X2 + beta3*X3 + beta4*X4),
-  start=list(beta1=-1, beta2=.5, beta3=-.25, beta4=-.1),
-  data=dff, nls.control(maxiter = 500)
-), silent=TRUE)
+IF_P_Xstar_model = try(
+  nls(IF_P_Xstar_ystar ~ expit(beta1*X1 + beta2*X2 + beta3*X3 + beta4*X4),
+      start=list(beta1=0, beta2=0, beta3=0, beta4=0),
+      lower=c(-2, -2, -2, -2),
+      upper=c(2, 2, 2, 2),
+      algorithm="port",
+      data=dff, nls.control(maxiter = 500))
+    , silent=TRUE)
 
 # Getting predicted values
 IF_P_Xstar_gammahat = try(predict(IF_P_Xstar_model), silent=TRUE)
@@ -356,6 +465,21 @@ IF_P_Xstar_bias = try( mean(abs(IF_P_Xstar_gammahat - gamma)) , silent=TRUE)
 # Show NA if I get an error message
 IF_P_Xstar_bias = ifelse(class(IF_P_Xstar_bias)=="numeric" && IF_P_Xstar_bias!=Inf, IF_P_Xstar_bias, NA)
 
+# Coverage
+
+# Standard error
+IF_P_Xstar_gammahat_sd = sqrt( mean(IF_P_Xstar_ystar*t(IF_P_Xstar_ystar)) ) # I think I'm missing something here. 
+
+# Confidence interval
+IF_P_Xstar_ci_lb = mean(IF_P_Xstar_gammahat) - 2*IF_P_Xstar_gammahat_sd / sqrt(samplesize)
+IF_P_Xstar_ci_ub = mean(IF_P_Xstar_gammahat) + 2*IF_P_Xstar_gammahat_sd / sqrt(samplesize)
+#IF_P_Xstar_ci = c(IF_P_Xstar_ci_lb, IF_P_Xstar_ci_ub)
+IF_P_Xstar_ci = paste(IF_P_Xstar_ci_lb, IF_P_Xstar_ci_ub, sep=", ")
+
+# # Coverage
+# IF_P_Xstar_coverage = length(which( dff$gamma >= IF_P_Xstar_ci_lb & dff$gamma <= IF_P_Xstar_ci_ub ))/samplesize
+
+
 
 
 
@@ -372,9 +496,12 @@ IF_N_Xstar_ystar = (1/IF_N_Xstar_mu1)*( (IF_N_Xstar_mu0/IF_N_Xstar_mu1)*(1/IF_N_
 # Fitting model
 IF_N_Xstar_model = try(nls(
   IF_N_Xstar_ystar ~ expit(beta1*X1 + beta2*X2 + beta3*X3 + beta4*X4),
-  start=list(beta1=-1, beta2=.5, beta3=-.25, beta4=-.1),
-  data=dff, nls.control(maxiter = 500)
-), silent=TRUE)
+  start=list(beta1=0, beta2=0, beta3=0, beta4=0),
+  lower=c(-2, -2, -2, -2),
+  upper=c(2, 2, 2, 2),
+  algorithm="port",
+  data=dff, nls.control(maxiter = 500))
+  , silent=TRUE)
 
 # Getting predicted values
 IF_N_Xstar_gammahat = try(predict(IF_N_Xstar_model), silent=TRUE)
@@ -392,19 +519,37 @@ IF_N_Xstar_bias = try( mean(abs(IF_N_Xstar_gammahat - gamma)) , silent=TRUE)
 # Show NA if I get an error message
 IF_N_Xstar_bias = ifelse(class(IF_N_Xstar_bias)=="numeric" && IF_N_Xstar_bias!=Inf, IF_N_Xstar_bias, NA)
 
+# Coverage
+
+# Standard error
+IF_N_Xstar_gammahat_sd = sqrt( mean(IF_N_Xstar_ystar*t(IF_N_Xstar_ystar)) ) # I think I'm missing something here. Should I include - gamma - gamma_beta?
+
+# Confidence interval
+IF_N_Xstar_ci_lb = mean(IF_N_Xstar_gammahat) - 2*IF_N_Xstar_gammahat_sd / sqrt(samplesize)
+IF_N_Xstar_ci_ub = mean(IF_N_Xstar_gammahat) + 2*IF_N_Xstar_gammahat_sd / sqrt(samplesize)
+# IF_N_Xstar_ci = c(IF_N_Xstar_ci_lb, IF_N_Xstar_ci_ub)
+IF_N_Xstar_ci = paste(IF_N_Xstar_ci_lb, IF_N_Xstar_ci_ub, sep=", ")
+
+# # Coverage
+# IF_N_Xstar_coverage = length(which( dff$gamma >= IF_N_Xstar_ci_lb & dff$gamma <= IF_N_Xstar_ci_ub ))/samplesize
+
+
 
 
 # Function will return this
 toreturn = c(PI_P_X_RMSE, PI_P_Xstar_RMSE, PI_N_X_RMSE, PI_N_Xstar_RMSE, 
              IF_P_X_RMSE, IF_P_Xstar_RMSE, IF_N_X_RMSE, IF_N_Xstar_RMSE,
              PI_P_X_bias, PI_P_Xstar_bias, PI_N_X_bias, PI_N_Xstar_bias, 
-             IF_P_X_bias, IF_P_Xstar_bias, IF_N_X_bias, IF_N_Xstar_bias)
+             IF_P_X_bias, IF_P_Xstar_bias, IF_N_X_bias, IF_N_Xstar_bias,
+             PI_P_X_ci, PI_P_Xstar_ci, PI_N_X_ci, PI_N_Xstar_ci, 
+             IF_P_X_ci, IF_P_Xstar_ci, IF_N_X_ci, IF_N_Xstar_ci
+             )
 
 return(toreturn)
 }
 
 
-fun.simulate(200)
+
 fun.simulate(200)
 fun.simulate(200)
 fun.simulate(200)
@@ -415,13 +560,12 @@ fun.simulate(500)
 fun.simulate(500)
 
 fun.simulate(1000)
-fun.simulate(1000)
+fun.simulate(10000)
 
-barplot(fun.simulate(2000))
 
-# 
+
 # # Repeat simulation for different sample sizes
-samplesizes = c(rep(200, 10), rep(1000, 10), rep(10000, 10))
+samplesizes = c(rep(200, 100), rep(1000, 100), rep(10000, 100))
 #samplesizes = c(rep(1000, 10), rep(2000, 10))
 
 
@@ -432,7 +576,10 @@ colnames(arr) <- c("sample_sizes",
                    "PI_P_X_RMSE", "PI_P_Xstar_RMSE", "PI_N_X_RMSE", "PI_N_Xstar_RMSE", 
                    "IF_P_X_RMSE", "IF_P_Xstar_RMSE", "IF_N_X_RMSE", "IF_N_Xstar_RMSE",
                    "PI_P_X_bias", "PI_P_Xstar_bias", "PI_N_X_bias", "PI_N_Xstar_bias", 
-                   "IF_P_X_bias", "IF_P_Xstar_bias", "IF_N_X_bias", "IF_N_Xstar_bias")
+                   "IF_P_X_bias", "IF_P_Xstar_bias", "IF_N_X_bias", "IF_N_Xstar_bias",
+                   "PI_P_X_ci", "PI_P_Xstar_ci", "PI_N_X_ci", "PI_N_Xstar_ci", 
+                   "IF_P_X_ci", "IF_P_Xstar_ci", "IF_N_X_ci", "IF_N_Xstar_ci")
+
 
 arr[1:length(samplesizes),1] = samplesizes
 arr
@@ -447,14 +594,14 @@ arr
 df.sim = as.data.frame(arr)
 
 
-colnames(df.sim)[2] = "Plugin_param_cor"
-colnames(df.sim)[3] = "Plugin_param_mis"
-colnames(df.sim)[4] = "Plugin_nonp_cor"
-colnames(df.sim)[5] = "Plugin_nonp_mis"
-colnames(df.sim)[6] = "Influence_fun_param_cor"
-colnames(df.sim)[7] = "Influence_fun_param_mis"
-colnames(df.sim)[8] = "Influence_fun_nonp_cor"
-colnames(df.sim)[9] = "Influence_fun_nonp_mis"
+colnames(df.sim)[2] = "Plugin_param_cor_RMSE"
+colnames(df.sim)[3] = "Plugin_param_mis_RMSE"
+colnames(df.sim)[4] = "Plugin_nonp_cor_RMSE"
+colnames(df.sim)[5] = "Plugin_nonp_mis_RMSE"
+colnames(df.sim)[6] = "Influence_fun_param_cor_RMSE"
+colnames(df.sim)[7] = "Influence_fun_param_mis_RMSE"
+colnames(df.sim)[8] = "Influence_fun_nonp_cor_RMSE"
+colnames(df.sim)[9] = "Influence_fun_nonp_mis_RMSE"
 colnames(df.sim)[10] = "Plugin_param_cor_bias"
 colnames(df.sim)[11] = "Plugin_param_mis_bias"
 colnames(df.sim)[12] = "Plugin_nonp_cor_bias"
@@ -463,20 +610,205 @@ colnames(df.sim)[14] = "Influence_fun_param_cor_bias"
 colnames(df.sim)[15] = "Influence_fun_param_mis_bias"
 colnames(df.sim)[16] = "Influence_fun_nonp_cor_bias"
 colnames(df.sim)[17] = "Influence_fun_nonp_mis_bias"
+colnames(df.sim)[18] = "Plugin_param_cor_ci"
+colnames(df.sim)[19] = "Plugin_param_mis_ci"
+colnames(df.sim)[20] = "Plugin_nonp_cor_ci"
+colnames(df.sim)[21] = "Plugin_nonp_mis_ci"
+colnames(df.sim)[22] = "Influence_fun_param_cor_ci"
+colnames(df.sim)[23] = "Influence_fun_param_mis_ci"
+colnames(df.sim)[24] = "Influence_fun_nonp_cor_ci"
+colnames(df.sim)[25] = "Influence_fun_nonp_mis_ci"
+
 
 
 setwd(WD_simulation)
-save(df.sim, file="df.sim.fin-2017-05-19_rf.rda")
+save(df.sim, file="df.sim.fin-2017-09-17_wcoverage.rda")
+# load("df.sim.fin-2017-09-17_wcoverage.rda")
 
 
 
-# # REMOVE OUTLIERS FOR Parametric_misspecified
-# df.sim = df.sim[which(df.sim$Parametric_misspecified<0.5),]
+# Estimating coverage
+# - True value is mean(gamma)?? WHAT IS IT? It really should just be one value.
+
+
+# Extract lower and upper bounds
+fun.extract.lb = function(charvector){
+  lb = substr(charvector, 1, regexpr(",", charvector)-1)
+  return(lb)
+}
+
+fun.extract.ub = function(charvector){
+  ub = substr(charvector, regexpr(",", charvector)+2, nchar(as.character(charvector[1])))
+  return(ub)
+}
+
+
+# colnames(df.sim)[18] = "Plugin_param_cor_ci"
+df.sim$Plugin_param_cor_ci_lb = as.numeric(fun.extract.lb(df.sim$Plugin_param_cor_ci))
+df.sim$Plugin_param_cor_ci_ub = as.numeric(fun.extract.ub(df.sim$Plugin_param_cor_ci))
+
+# colnames(df.sim)[19] = "Plugin_param_mis_ci"
+df.sim$Plugin_param_mis_ci_lb = as.numeric(fun.extract.lb(df.sim$Plugin_param_mis_ci))
+df.sim$Plugin_param_mis_ci_ub = as.numeric(fun.extract.ub(df.sim$Plugin_param_mis_ci))
+
+# colnames(df.sim)[20] = "Plugin_nonp_cor_ci"
+df.sim$Plugin_nonp_cor_ci_lb = as.numeric(fun.extract.lb(df.sim$Plugin_nonp_cor_ci))
+df.sim$Plugin_nonp_cor_ci_ub = as.numeric(fun.extract.ub(df.sim$Plugin_nonp_cor_ci))
+
+# colnames(df.sim)[21] = "Plugin_nonp_mis_ci"
+df.sim$Plugin_nonp_mis_ci_lb = as.numeric(fun.extract.lb(df.sim$Plugin_nonp_mis_ci))
+df.sim$Plugin_nonp_mis_ci_ub = as.numeric(fun.extract.ub(df.sim$Plugin_nonp_mis_ci))
+
+# colnames(df.sim)[22] = "Influence_fun_param_cor_ci"
+df.sim$Influence_fun_param_cor_ci_lb = as.numeric(fun.extract.lb(df.sim$Influence_fun_param_cor_ci))
+df.sim$Influence_fun_param_cor_ci_ub = as.numeric(fun.extract.ub(df.sim$Influence_fun_param_cor_ci))
+
+# colnames(df.sim)[23] = "Influence_fun_param_mis_ci"
+df.sim$Influence_fun_param_mis_ci_lb = as.numeric(fun.extract.lb(df.sim$Influence_fun_param_mis_ci))
+df.sim$Influence_fun_param_mis_ci_ub = as.numeric(fun.extract.ub(df.sim$Influence_fun_param_mis_ci))
+
+# colnames(df.sim)[24] = "Influence_fun_nonp_cor_ci"
+df.sim$Influence_fun_nonp_cor_ci_lb = as.numeric(fun.extract.lb(df.sim$Influence_fun_nonp_cor_ci))
+df.sim$Influence_fun_nonp_cor_ci_ub = as.numeric(fun.extract.ub(df.sim$Influence_fun_nonp_cor_ci))
+
+# colnames(df.sim)[25] = "Influence_fun_nonp_mis_ci"
+df.sim$Influence_fun_nonp_mis_ci_lb = as.numeric(fun.extract.lb(df.sim$Influence_fun_nonp_mis_ci))
+df.sim$Influence_fun_nonp_mis_ci_ub = as.numeric(fun.extract.ub(df.sim$Influence_fun_nonp_mis_ci))
+
+# Keep only lower and upper bounds instead of ci variables
+df.sim1 <- within(df.sim, rm("Plugin_param_cor_ci", "Plugin_param_mis_ci",
+                             "Plugin_nonp_cor_ci", "Plugin_nonp_mis_ci", 
+                            "Influence_fun_param_cor_ci", "Influence_fun_param_mis_ci", 
+                            "Influence_fun_nonp_cor_ci", "Influence_fun_nonp_mis_ci"))
+
+
+# These change if I decided to use different sample sizes
+df.sim.200 <- df.sim1[which(df.sim1$sample_sizes==200),]
+df.sim.1000 <- df.sim1[which(df.sim1$sample_sizes==1000),]
+df.sim.10000 <- df.sim1[which(df.sim1$sample_sizes==10000),]
+
+
+# True gamma?
+meangamma = mean(gamma)
+# FAKE GAMMA FOR NOW BECAUSE I CAN'T FIGURE IT OUT. I TRUST THE CI'S MORE THAN THE MEAN...
+#meangamma = 0.627182 #(mean(df.sim.10000$Plugin_param_cor_lb)+mean(df.sim.10000$Plugin_param_cor_ub))*.5
+
+
+# Calculating covarage
+df.sims = c("df.sim.200", "df.sim.1000", "df.sim.10000")
+thevec <- list()
+
+for(i in 1:length(df.sims)){
+  df.sim.n = get(df.sims[i])
+  Plugin_param_cor_coverage = length(which(meangamma >= df.sim.n$Plugin_param_cor_ci_lb & meangamma <= df.sim.n$Plugin_param_cor_ci_ub))/nrow(df.sim.n)
+  Plugin_param_mis_coverage   = length(which(meangamma >= df.sim.n$Plugin_param_mis_ci_lb & meangamma <= df.sim.n$Plugin_param_mis_ci_ub))/nrow(df.sim.n)
+  Plugin_nonp_cor_coverage = length(which(meangamma >= df.sim.n$Plugin_nonp_cor_ci_lb & meangamma <= df.sim.n$Plugin_nonp_cor_ci_ub))/nrow(df.sim.n)
+  Plugin_nonp_mis_coverage = length(which(meangamma >= df.sim.n$Plugin_nonp_mis_ci_lb & meangamma <= df.sim.n$Plugin_nonp_mis_ci_ub))/nrow(df.sim.n)
+  Influence_fun_param_cor_coverage = length(which(meangamma >= df.sim.n$Influence_fun_param_cor_ci_lb & meangamma <= df.sim.n$Influence_fun_param_cor_ci_ub))/nrow(df.sim.n)
+  Influence_fun_param_mis_coverage = length(which(meangamma >= df.sim.n$Influence_fun_param_mis_ci_lb & meangamma <= df.sim.n$Influence_fun_param_mis_ci_ub))/nrow(df.sim.n)
+  Influence_fun_nonp_cor_coverage = length(which(meangamma >= df.sim.n$Influence_fun_nonp_cor_ci_lb & meangamma <= df.sim.n$Influence_fun_nonp_cor_ci_ub))/nrow(df.sim.n)
+  Influence_fun_nonp_mis_coverage = length(which(meangamma >= df.sim.n$Influence_fun_nonp_mis_ci_lb & meangamma <= df.sim.n$Influence_fun_nonp_mis_ci_ub))/nrow(df.sim.n)
+  
+  thevec[[i]] <- c(Plugin_param_cor_coverage, Plugin_param_mis_coverage, Plugin_nonp_cor_coverage, Plugin_nonp_mis_coverage,
+  Influence_fun_param_cor_coverage, Influence_fun_param_mis_coverage, Influence_fun_nonp_cor_coverage, Influence_fun_nonp_mis_coverage)
+  
+  }
+
+thevec
 
 
 
-# Alert when it's done running
-beep(1) 
+
+
+
+
+
+# ---------
+# Newer draft with coverage
+# ---------
+
+# Barplot with error bars
+# Reshape data frame from simulation, df.sim
+aa = melt(data = df.sim, id.vars = "sample_sizes", 
+          variable.name = "Algorithm", value.name = "Value") # Not changing the names right...
+dat = rename(aa, c(sample_sizes = "Sample_Size", variable = "Algorithm", value = "Value"))
+dat$Sample_Size = as.factor(dat$Sample_Size)
+
+
+dat$RMSE = ifelse(str_detect(dat$Algorithm, "RMSE"), 1, 0)
+dat$bias = ifelse(str_detect(dat$Algorithm, "bias"), 1, 0)
+dat$ci = ifelse(str_detect(dat$Algorithm, "ci"), 1, 0)
+
+
+# Define function for mean and sd
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = sd(x[[col]], na.rm=TRUE))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- rename(data_sum, c("mean" = varname))
+  return(data_sum)
+}
+
+
+
+
+# Create new dataframe for barplot
+dfsum = data_summary(data = dat, varname = "Value", groupnames = c("Sample_Size", "Algorithm"))
+dfsum$Algorithm = as.factor(dfsum$Algorithm)
+dfsum$theindex = 1:dim(dfsum)[1]
+dfsum$Stat = ifelse(dfsum$theindex %in% grep("bias", dfsum$Algorithm), "Bias", 
+                    ifelse(dfsum$theindex %in% grep("ci", dfsum$Algorithm), "CI", "RMSE")
+)
+dfsum$Stat = as.factor(dfsum$Stat)
+dfsum$Algorithm_type = ifelse(dfsum$theindex %in% grep("Plugin", dfsum$Algorithm), "Plugin", "Proposed")
+dfsum$cormispnp = 0
+dfsum$cormispnp = ifelse((str_detect(dfsum$Algorithm, "cor")& str_detect(dfsum$Algorithm, "param")), "Cor P", dfsum$cormispnp)
+dfsum$cormispnp = ifelse((str_detect(dfsum$Algorithm, "mis")& str_detect(dfsum$Algorithm, "param")), "Mis P", dfsum$cormispnp)
+dfsum$cormispnp = ifelse((str_detect(dfsum$Algorithm, "cor")& str_detect(dfsum$Algorithm, "nonp")), "Cor NP", dfsum$cormispnp)
+dfsum$cormispnp = ifelse((str_detect(dfsum$Algorithm, "mis")& str_detect(dfsum$Algorithm, "nonp")), "Mis NP", dfsum$cormispnp)
+dfsum$cormispnp = as.factor(dfsum$cormispnp)
+dfsum$cormispnp = factor(dfsum$cormispnp,c("Cor P","Mis P","Cor NP", "Mis NP"))
+dfsum$Sample_Sizes = paste("n=", dfsum$Sample_Size, sep="")
+dfsum$Sample_Sizes = factor(dfsum$Sample_Sizes,c("n=200","n=1000", "n=10000")) # THIS CHANGES IF SAMPLE SIZES CHANGE
+dfsum
+
+head(dfsum)
+
+bp = ggplot(dfsum, aes(x=cormispnp, y=Value, fill=Algorithm_type)) + 
+  geom_bar(stat="identity", color="black", position="dodge", width=.5) +
+  geom_errorbar(aes(ymin=Value-sd, ymax=Value+sd), width=.2, position = position_dodge(.5)) +
+  ggtitle("Plug-in vs. proposed influence-function estimators, 10 iterations per sample size") + xlab("") + ylab("")
+
+
+setwd(WD_figs)
+pdf("20170917__Barplot.pdf", width=10, height=7)
+bp + facet_grid(Stat ~ Sample_Sizes,scales = "free_y", switch = "y") + theme_bw()# + theme_minimal() 
+dev.off()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ----------
+# Older draft without coverage
+# ----------
 
 
 
@@ -531,11 +863,15 @@ bp = ggplot(dfsum, aes(x=cormispnp, y=RMSE, fill=Algorithm_type)) +
   geom_errorbar(aes(ymin=RMSE-sd, ymax=RMSE+sd), width=.2, position = position_dodge(.5)) +
   ggtitle("Plug-in vs. proposed influence-function estimators, 10 iterations per sample size") + xlab("") + ylab("")
 
+bp
 
 setwd(WD_figs)
 pdf("20170519__Barplot_withbias.pdf", width=12, height=8)
 bp + facet_grid(bias ~ Sample_Sizes,scales = "free_y", switch = "y") + theme_bw()# + theme_minimal() 
 dev.off()
+
+
+
 
 
 
