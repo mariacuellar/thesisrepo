@@ -132,6 +132,7 @@ IF_N_X_ci_lb = IF_N_X_gammahat_mean - 2*IF_N_X_gammahat_sd / sqrt(samplesize)
 IF_N_X_ci_ub = IF_N_X_gammahat_mean + 2*IF_N_X_gammahat_sd / sqrt(samplesize)
 IF_N_X_ci = paste(IF_N_X_ci_lb, IF_N_X_ci_ub, sep=", ")
 
+# "0.223827896627772, 0.224211845533956"
 
 
 
@@ -190,8 +191,7 @@ PI_P_X_ci_lb = PI_P_X_gammahat_mean - 2*PI_P_X_gammahat_sd / sqrt(samplesize)
 PI_P_X_ci_ub = PI_P_X_gammahat_mean + 2*PI_P_X_gammahat_sd / sqrt(samplesize)
 PI_P_X_ci = paste(PI_P_X_ci_lb, PI_P_X_ci_ub, sep=", ")
 
-
-
+"0.0183518423488624, 0.0199616313618164"
 
 
 
