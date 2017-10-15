@@ -1,0 +1,1205 @@
+# Thesis simulations
+# Oct 14, 2017
+# Making my own simulation for the parameter of interest: PC = gamma = 1-1/RR = 1-mu0/mu1.
+#
+# define working directory
+WD_figs = "/home/mcuellar"
+WD_thesis = "/home/mcuellar/Thesis"
+WD_simulation = "/home/mcuellar/Thesis"
+
+# Turn warnings on/off
+options(warn=-1)
+# options(warn=0)
+
+# libraries
+library(ggplot2)
+library(reshape2)
+library(stringr)
+library(gdata)
+library(randomForest)
+library(doParallel)
+registerDoParallel(8) # How many cores to use? # our server has 32, but James said I could only use 8.
+#library(ranger)
+
+# define expit and logit functions
+fun.expit = function(x){ return( exp(x)/(1+exp(x)) ) }
+fun.logit = function(x){ return( log(x)/log(1-x) ) }
+
+
+# NEED TO FIX SO IT RUNS WITHOUT DEFINING VARIABLES OUTSIDE THE DATAFRAME, ALSO CHANGE PI AND MU TO TRUE.PI 
+
+# Data generation. Note: samplesize needs to be greater than 100
+fun.generate.data = function(samplesize){
+  # set.seed(400) # seed for random number generator
+  # let us know how far it's gone
+  #cat(paste(samplesize,"... "))
+  samplesize=2000
+  # true parameters
+  index = 1:samplesize
+  beta = 0.5
+  Y1 = rbinom(n = samplesize, size = 1, prob = beta)
+  
+  X1 = rnorm(n = samplesize, mean = 0, sd = .1) # correct model
+  X2 = rnorm(n = samplesize, mean = 0, sd = .1)
+  X3 = rnorm(n = samplesize, mean = 0, sd = .1)
+  X4 = rnorm(n = samplesize, mean = 0, sd = .1)
+  
+  X1star = exp(X1/2) # misspecified model
+  X2star = X2/(1 + exp(X1)) + 10
+  X3star = (X1*X3/25 + 0.6)^3
+  X4star = (X2 + X4 + 20)^2
+  
+  pi = fun.expit(-X1+0.5*X2-0.25*X3-0.1*X4)
+  
+  A = rbinom(n = samplesize, size = 1, prob = fun.expit(-X1+0.5*X2-0.25*X3-0.1*X4))
+  
+  # Defining my parameter
+  beta = 0.5
+  mu0 = beta/(1+exp(-X1+0.5*X2-0.25*X3-0.1*X4))
+  mu1 = rep(beta, samplesize)
+  #gamma = 1 - mu0/mu1
+  gamma = fun.expit(-X1+0.5*X2-0.25*X3-0.1*X4) # Don't we need to make it so that gamma is equal to 1-mu0/mu1?? It is.
+  meangamma = mean(sample(gamma, 100))
+  
+  # generate data frame
+  df = as.data.frame(cbind(index, X1, X2, X3, X4, X1star, X2star, X3star, X4star, pi, gamma, meangamma, A, Y1))
+  
+  # generate Y0 conditional on combinations of values of A and Y1
+  dfy11 = df[which(df$Y1==1),]
+  dfy11$Y0 = rbinom(n = nrow(dfy11) , size = 1, prob = (1-gamma)) # or is it location = fun.expit(t(PSI)*X), scale = 0?
+  
+  dfy10 = df[which(df$Y1==0),]
+  dfy10$Y0 = 0
+  
+  # add Y0 to dataframe
+  df_wy0 = as.data.frame(rbind(dfy11, dfy10))
+  
+  # apply consistency to get Y
+  df_wy0$Y = ifelse(df_wy0$A==1, df_wy0$Y1, df_wy0$Y0) 
+  Y = df_wy0$Y
+  
+  # ordering data so it's as it was at the beginning
+  dff = df_wy0[order(df_wy0$index),] 
+  
+  return(dff)
+}
+
+
+# 1. Plug-in, parametric, untransformed X's (correctly specified model)
+fun.PI_P_X = function(dff){
+  samplesize = nrow(dff)
+  
+  # data splitting
+  index = sample(1:nrow(dff)) # randomize indices
+  dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
+  dff.test = dff[index,][((nrow(dff)/2)+1):nrow(dff),] # make testing set
+  
+  # estimating the nuisance parameters
+  PI_P_X_mu0 = glm(Y~X1+X2+X3+X4, data = dff.train[which(dff.train$A==0),], family = "poisson")
+  PI_P_X_mu1 = glm(Y~X1+X2+X3+X4, data = dff.train[which(dff.train$A==1),], family = "binomial")
+  
+  # getting fitted values
+  PI_P_X_mu0_hat = predict(PI_P_X_mu0, newdata = dff.test, type="response")
+  PI_P_X_mu1_hat = predict(PI_P_X_mu1, newdata = dff.test, type="response")
+  
+  # calculating gamma hat
+  PI_P_X_gammahat = (PI_P_X_mu1_hat - PI_P_X_mu0_hat)/PI_P_X_mu1_hat
+  PI_P_X_gammahat_mean = mean(sample(PI_P_X_gammahat, 100))
+  meangamma = mean(sample(gamma, 100))
+  
+  # RMSE
+  PI_P_X_RMSE = sqrt(  mean( (PI_P_X_gammahat_mean - meangamma)^2 )  ) #
+  
+  # Bias
+  PI_P_X_bias = mean(abs(PI_P_X_gammahat_mean - meangamma))
+  
+  # sd
+  PI_P_X_gammahat_sd = sqrt( (PI_P_X_gammahat - mean(PI_P_X_gammahat))^2 )
+  
+  # # function: boostrap to estimate confidence interval
+  # fun.PI_P_X_boot = function(xthedata){
+  #   
+  #   # data splitting
+  #   index = sample(1:nrow(xthedata)) # randomize indices
+  #   xthedata.train = xthedata[index,][1:(nrow(xthedata)/2),] # make training set
+  #   xthedata.test = xthedata[index,][((nrow(xthedata)/2)+1):nrow(xthedata),] # make testing set
+  #   
+  #   # estimating the nuisance parameters
+  #   PI_P_X_mu0 = glm(Y~X1+X2+X3+X4, data = xthedata.train[which(xthedata.train$A==0),], family = "poisson")
+  #   PI_P_X_mu1 = glm(Y~X1+X2+X3+X4, data = xthedata.train[which(xthedata.train$A==1),], family = "binomial")
+  #   
+  #   # getting fitted values 
+  #   PI_P_X_mu0_hat = predict(PI_P_X_mu0, newdata = xthedata.test, type="response")
+  #   PI_P_X_mu1_hat = predict(PI_P_X_mu1, newdata = xthedata.test, type="response")
+  #   
+  #   # calculating gamma hat
+  #   PI_P_X_gammahat = (PI_P_X_mu1_hat - PI_P_X_mu0_hat)/PI_P_X_mu1_hat
+  #   PI_P_X_gammahat_mean = mean(sample(PI_P_X_gammahat, 100))
+  #   
+  #   return(PI_P_X_gammahat_mean)
+  # }
+  # 
+  # # apply bootstrap
+  # bootreps=1000
+  # PI_P_X_bootvec = 0
+  # #stime = system.time({ # this is for testing the time. It's 3 times faster with dopar than without.
+  # PI_P_X_bootvec.1 = foreach(i=1:bootreps, .options.multicore=list(preschedule=TRUE)) %dopar% {
+  #   
+  #   # randomize indices
+  #   index.b = sample(1:nrow(dff), replace=FALSE) 
+  #   
+  #   # select new sample of rows from dff
+  #   newdff = dff[index.b,] 
+  #   
+  #   # calculating gammahat_star (star because it's from a bootstrap)
+  #   PI_P_X_gammahat_star_mean = fun.PI_P_X_boot(newdff) 
+  #   
+  #   # store in a vector
+  #   PI_P_X_bootvec[i] <- PI_P_X_gammahat_star_mean
+  # }
+  # #})
+  # #stime
+  # 
+  # # standard error
+  # PI_P_X_gammahat_sd = sd(unlist(PI_P_X_bootvec.1), na.rm = TRUE)
+
+  # confidence interval
+  PI_P_X_ci = paste(PI_P_X_gammahat_mean - 2*PI_P_X_gammahat_sd / sqrt(samplesize), 
+                    PI_P_X_gammahat_mean + 2*PI_P_X_gammahat_sd / sqrt(samplesize), 
+                    sep=", ")
+  
+  return(c(PI_P_X_RMSE, PI_P_X_bias, PI_P_X_ci))
+}
+
+
+# 2. Plug-in, parametric, transformed X's (misspecified model)
+fun.PI_P_Xstar = function(dff){
+  samplesize = nrow(dff)
+  
+  # data splitting
+  index = sample(1:nrow(dff)) # randomize indices
+  dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
+  dff.test = dff[index,][((nrow(dff)/2)+1):nrow(dff),] # make testing set
+  
+  # estimating the nuisance parameters
+  PI_P_Xstar_mu0 = glm(Y~X1star+X2star+X3star+X4star, data = dff.train[which(dff.train$A==0),], family = "binomial")
+  PI_P_Xstar_mu1 = glm(Y~X1star+X2star+X3star+X4star, data = dff.train[which(dff.train$A==1),], family = "binomial")
+  
+  # getting fitted values
+  PI_P_Xstar_mu0_hat = predict(PI_P_Xstar_mu0, newdata = dff.test, type="response")
+  PI_P_Xstar_mu1_hat = predict(PI_P_Xstar_mu1, newdata = dff.test, type="response")
+  
+  # calculating gamma hat
+  PI_P_Xstar_gammahat  = (PI_P_Xstar_mu1_hat - PI_P_Xstar_mu0_hat)/PI_P_Xstar_mu1_hat
+  PI_P_Xstar_gammahat_mean = mean(sample(PI_P_Xstar_gammahat, size = 100))
+  
+  # RMSE 
+  PI_P_Xstar_RMSE = sqrt(  mean( (PI_P_Xstar_gammahat_mean - meangamma)^2 )  )
+  
+  # bias
+  PI_P_Xstar_bias = mean( abs(PI_P_Xstar_gammahat_mean - meangamma) )
+  
+  # variance
+  PI_P_Xstar_gammahat_sd = sqrt( PI_P_Xstar_RMSE - PI_P_Xstar_bias^2 )
+  
+  # # function: boostrap to estimate confidence interval
+  # fun.PI_P_Xstar_boot = function(xthedata){
+  #   
+  #   # data splitting
+  #   index = sample(1:nrow(xthedata)) # randomize indices
+  #   xthedata.train = xthedata[index,][1:(nrow(xthedata)/2),] # make training set
+  #   xthedata.test = xthedata[index,][((nrow(xthedata)/2)+1):nrow(xthedata),] # make testing set
+  #   
+  #   # estimating the nuisance parameters
+  #   PI_P_Xstar_mu0_hat = glm(Y~X1star+X2star+X3star+X4star, data = xthedata.train[which(xthedata.train$A==0),], family = "binomial")
+  #   PI_P_Xstar_mu1_hat = glm(Y~X1star+X2star+X3star+X4star, data = xthedata.train[which(xthedata.train$A==1),], family = "binomial")
+  #   
+  #   # getting fitted values 
+  #   PI_P_Xstar_mu0_hat = predict(PI_P_Xstar_mu0, newdata = xthedata.test, type="response")
+  #   PI_P_Xstar_mu1_hat = predict(PI_P_Xstar_mu1, newdata = xthedata.test, type="response")
+  #   
+  #   # calculating gamma hat
+  #   PI_P_Xstar_gammahat = (PI_P_Xstar_mu1_hat - PI_P_Xstar_mu0_hat)/PI_P_Xstar_mu1_hat
+  #   PI_P_Xstar_gammahat_mean = mean(sample(PI_P_Xstar_gammahat, 100))
+  #   
+  #   return(PI_P_Xstar_gammahat_mean)
+  # }
+  # 
+  # # apply bootstrap
+  # bootreps=1000
+  # PI_P_Xstar_bootvec = 0
+  # PI_P_Xstar_bootvec.1 = foreach(i=1:bootreps, .options.multicore=list(preschedule=TRUE)) %dopar% {
+  #   
+  #   # randomize indices
+  #   index.b = sample(1:nrow(dff), replace=FALSE) 
+  #   
+  #   # select new sample of rows from dff
+  #   newdff = dff[index.b,] 
+  #   
+  #   # calculating gammahat_star (star because it's from a bootstrap)
+  #   PI_P_Xstar_gammahat_star_mean = fun.PI_P_Xstar_boot(newdff) 
+  #   
+  #   # store in a vector
+  #   PI_P_Xstar_bootvec[i] <- PI_P_Xstar_gammahat_star_mean
+  # }
+  # 
+  # # Standard error
+  # PI_P_Xstar_gammahat_sd = sd(unlist(PI_P_Xstar_bootvec.1), na.rm = TRUE)
+  
+  # Confidence interval
+  PI_P_Xstar_ci = paste(PI_P_Xstar_gammahat_mean - 2*PI_P_Xstar_gammahat_sd / sqrt(samplesize), 
+                        PI_P_Xstar_gammahat_mean + 2*PI_P_Xstar_gammahat_sd / sqrt(samplesize), 
+                        sep=", ")
+  
+  return(c(PI_P_Xstar_RMSE, PI_P_Xstar_bias, PI_P_Xstar_ci))
+}
+
+
+# 3. Plug-in, nonparametric, untransformed X's estimator:
+fun.PI_N_X = function(dff){
+  samplesize = nrow(dff)
+  
+  # data splitting
+  index = sample(1:nrow(dff)) # randomize indices
+  dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
+  dff.test = dff[index,][((nrow(dff)/2)+1):nrow(dff),] # make testing set
+  
+  # # estimating the nuisance parameters
+  PI_N_X_mu0 = randomForest(Y~X1+X2+X3+X4, data = dff.train[which(dff.train$A==0),], type=regression) #do.trace = 100,
+  PI_N_X_mu1 = randomForest(Y~X1+X2+X3+X4, data = dff.train[which(dff.train$A==1),], type=regression)
+  
+  # getting fitted values
+  PI_N_X_mu0_hat = predict(PI_N_X_mu0, newdata = dff.test)
+  PI_N_X_mu1_hat = predict(PI_N_X_mu1, newdata = dff.test)
+  
+  # calculating gamma hat
+  PI_N_X_gammahat = (PI_N_X_mu1_hat - PI_N_X_mu0_hat)/PI_N_X_mu1_hat
+  PI_N_X_gammahat_mean = mean(sample(PI_N_X_gammahat, 100))
+  
+  # RMSE 
+  PI_N_X_RMSE = sqrt(  mean( (PI_N_X_gammahat_mean - meangamma)^2 )  )
+  
+  # Bias
+  PI_N_X_bias = mean(abs(PI_N_X_gammahat_mean - meangamma))
+  
+  # Confidence interval
+  # # No valid confidence interval here.
+  PI_N_X_ci = paste(NA, NA, sep=" ")
+  
+  return(c(PI_N_X_RMSE, PI_N_X_bias, PI_N_X_ci))
+}
+
+
+# 4. Plug-in, nonparametric, transformed X's estimator:
+fun.PI_N_Xstar = function(dff){
+  samplesize = nrow(dff)
+  
+  # data splitting
+  index = sample(1:nrow(dff)) # randomize indices
+  dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
+  dff.test = dff[index,][((nrow(dff)/2)+1):nrow(dff),] # make testing set
+  
+  # estimating the nuisance parameters
+  PI_N_Xstar_mu0 = randomForest(Y~X1star+X2star+X3star+X4star, data = dff.train[which(dff.train$A==0),], type=regression) #do.trace = 100, 
+  PI_N_Xstar_mu1 = randomForest(Y~X1star+X2star+X3star+X4star, data = dff.train[which(dff.train$A==1),], type=regression)
+  
+  # getting fitted values
+  PI_N_Xstar_mu0_hat = predict(PI_N_Xstar_mu0, newdata = dff.test)
+  PI_N_Xstar_mu1_hat = predict(PI_N_Xstar_mu1, newdata = dff.test)
+  
+  # calculating gamma hat
+  PI_N_Xstar_gammahat = (PI_N_Xstar_mu1_hat - PI_N_Xstar_mu0_hat)/PI_N_Xstar_mu1_hat
+  PI_N_Xstar_gammahat_mean = mean(sample(PI_N_Xstar_gammahat, 100))
+  
+  # RMSE 
+  PI_N_Xstar_RMSE = sqrt(  mean( (PI_N_Xstar_gammahat_mean - meangamma)^2 )  )
+  
+  # Bias
+  PI_N_Xstar_bias = mean(abs(PI_N_Xstar_gammahat_mean - meangamma))
+  
+  # Confidence interval
+  # # No valid confidence interval here.
+  PI_N_Xstar_ci = paste(NA, NA, sep=" ")
+  
+  return(c(PI_N_Xstar_RMSE, PI_N_Xstar_bias, PI_N_Xstar_ci))
+}
+
+
+# 5. Influence-function-based estimator, estimate nuisance parameters with plugin parametric untransformed Xs ----
+fun.IF_P_X = function(dff){
+  samplesize = nrow(dff)
+  
+  # data splitting
+  index = sample(1:nrow(dff)) # randomize indices
+  dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
+  dff.test = dff[index,][((nrow(dff)/2)+1):nrow(dff),] # make testing set
+  
+  # estimating the nuisance parameters
+  IF_P_X_mu0 = glm(Y~X1+X2+X3+X4, data = dff.train[which(dff.train$A==0),], family = "poisson")
+  IF_P_X_mu1 = glm(Y~X1+X2+X3+X4, data = dff.train[which(dff.train$A==1),], family = "binomial")
+  IF_P_X_pi = glm(A~X1+X2+X3+X4, data = dff.train, family = "binomial")
+  
+  # getting fitted values 
+  IF_P_X_mu0_hat = predict(IF_P_X_mu0, newdata = dff.test, type="response")
+  IF_P_X_mu1_hat = predict(IF_P_X_mu1, newdata = dff.test, type="response")
+  IF_P_X_pi_hat = predict(IF_P_X_pi, newdata = dff.test, type="response")
+  
+  # defining my pseudo-outcome
+  IF_P_X_ystar = (1/IF_P_X_mu1_hat)*((IF_P_X_mu0_hat/IF_P_X_mu1_hat)*(1/IF_P_X_pi_hat)*A*(Y-IF_P_X_mu1_hat) - 
+                                       (1/(1-IF_P_X_pi_hat))*(1-A)*(Y-IF_P_X_mu0_hat)) + 
+                                       (IF_P_X_mu1_hat-IF_P_X_mu0_hat)/IF_P_X_mu1_hat
+  
+  # fitting nlm to find beta.hat parameters
+  fun.obj = function(param, theY){
+    #betapointfive = exp(param[1])
+    beta1 = param[1]
+    beta2 = param[2]
+    beta3 = param[3]
+    beta4 = param[4]
+    Sel = A==0
+    phat = 0.5/(1+exp(beta1*X1[Sel] + beta2*X2[Sel] + beta3*X3[Sel] + beta4*X4[Sel]))
+    dens = dbinom(Y[Sel], 1, phat, log=TRUE)
+    return(-sum(dens))
+  }
+  
+  est.params = nlm(fun.obj, c(log(0.5), 0, 0, 0), IF_P_X_ystar, iterlim=10)
+  
+  beta1.hat = est.params[2][[1]][1]
+  beta2.hat = est.params[2][[1]][2]
+  beta3.hat = est.params[2][[1]][3]
+  beta4.hat = est.params[2][[1]][4]
+  
+  # getting predicted values for gamma hat
+  IF_P_X_gammahat = fun.expit(beta1.hat*X1 + beta2.hat*X2 + beta3.hat*X3 + beta4.hat*X4)
+  IF_P_X_gammahat_mean = mean(sample(IF_P_X_gammahat, size = 100))
+  
+  # RMSE
+  IF_P_X_RMSE = sqrt(  mean( (IF_P_X_gammahat_mean - meangamma)^2 ) )
+  
+  # bias
+  IF_P_X_bias = mean(abs(IF_P_X_gammahat_mean - meangamma) )
+  
+  # sd
+  nabla.gamma.arr = array(dim=c(4,1))
+  nabla.gamma.arr[1,1] = mean(X1*(1-IF_P_X_gammahat)*IF_P_X_gammahat)
+  nabla.gamma.arr[2,1] = mean(X2*(1-IF_P_X_gammahat)*IF_P_X_gammahat)
+  nabla.gamma.arr[3,1] = mean(X3*(1-IF_P_X_gammahat)*IF_P_X_gammahat)
+  nabla.gamma.arr[4,1] = mean(X4*(1-IF_P_X_gammahat)*IF_P_X_gammahat)
+  nabla.gamma = as.matrix(nabla.gamma.arr)
+                              
+  nabla.gamma.T = t(nabla.gamma)
+  
+  M.arr = array(dim=c(4,4))
+  M.arr[1,1] = mean(beta1.hat*(1-IF_P_X_gammahat)*IF_P_X_gammahat)
+  M.arr[1,2] = 0
+  M.arr[1,3] = 0
+  M.arr[1,4] = 0
+  M.arr[2,1] = 0
+  M.arr[3,1] = 0
+  M.arr[4,1] = 0
+  M.arr[2,2] = mean(beta2.hat*(1-IF_P_X_gammahat)*IF_P_X_gammahat)
+  M.arr[3,2] = 0
+  M.arr[4,2] = 0
+  M.arr[2,3] = 0
+  M.arr[3,3] = mean(beta3.hat*(1-IF_P_X_gammahat)*IF_P_X_gammahat)
+  M.arr[4,3] = 0
+  M.arr[2,4] = 0
+  M.arr[3,4] = 0
+  M.arr[4,4] = mean(beta4.hat*(1-IF_P_X_gammahat)*IF_P_X_gammahat)
+  
+  M = as.matrix(M.arr)
+  M.inverse = solve(M) # not square...
+  M.T.inverse = solve(t(M))
+  
+  phi = mean(X1*(1-IF_P_X_gammahat)*IF_P_X_gammahat * IF_P_X_ystar - (IF_P_X_mu1_hat - IF_P_X_mu0_hat)/IF_P_X_mu1_hat - IF_P_X_gammahat)
+  phi.arr = array(dim=c(4,4))
+  phi.arr[1,1] = phi
+  phi.arr[1,2] = 0
+  phi.arr[1,3] = 0
+  phi.arr[1,4] = 0
+  phi.arr[2,1] = 0
+  phi.arr[2,2] = phi
+  phi.arr[2,3] = 0
+  phi.arr[2,4] = 0
+  phi.arr[3,1] = 0
+  phi.arr[3,2] = 0
+  phi.arr[3,3] = phi
+  phi.arr[3,4] = 0
+  phi.arr[4,1] = 0
+  phi.arr[4,2] = 0
+  phi.arr[4,3] = 0
+  phi.arr[4,4] = phi
+  phi = as.matrix(phi.arr)
+  
+  EphiphiT = t(phi)*phi
+  
+  sandwich.variance = nabla.gamma.T %*% M.inverse %*% EphiphiT %*% M.T.inverse %*% nabla.gamma
+  
+  IF_P_X_gammahat_sd = sqrt(sandwich.variance)
+
+  # confidence interval
+  IF_P_X_ci = paste(IF_P_X_gammahat_mean - 2*IF_P_X_gammahat_sd / sqrt(samplesize), 
+                    IF_P_X_gammahat_mean + 2*IF_P_X_gammahat_sd / sqrt(samplesize), 
+                    sep=", ")
+  
+  return(c(IF_P_X_RMSE, IF_P_X_bias, IF_P_X_ci))
+}
+
+
+# 6. Influence-function-based estimator, estimate nuisance parameters with plugin nonparametric untransformed Xs ----
+fun.IF_N_X = function(dff){  
+  samplesize = nrow(dff)
+  
+  # data splitting
+  index = sample(1:nrow(dff)) # randomize indices
+  dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
+  dff.test = dff[index,][((nrow(dff)/2)+1):nrow(dff),] # make testing set
+  
+  # with randomForest
+  # estimating the nuisance parameters
+  IF_N_X_mu0 = randomForest(Y~X1+X2+X3+X4, data = dff.train[which(dff.train$A==0),], type=regression) #do.trace = 100,
+  IF_N_X_mu1 = randomForest(Y~X1+X2+X3+X4, data = dff.train[which(dff.train$A==1),], type=regression)
+  IF_N_X_pi = randomForest(A~X1+X2+X3+X4, data = dff.train, type=regression)
+  
+  # getting fitted values
+  IF_N_X_mu0_hat = predict(IF_N_X_mu0, newdata = dff.test)
+  IF_N_X_mu1_hat = predict(IF_N_X_mu1, newdata = dff.test)
+  IF_N_X_pi_hat = predict(IF_N_X_pi, newdata = dff.test)
+  
+  # with ranger
+  # # estimating the nuisance parameters
+  # IF_N_X_mu0 = ranger(Y~X1+X2+X3+X4, data = dff.train[which(dff.train$A==0),])
+  # IF_N_X_mu1 = ranger(Y~X1+X2+X3+X4, data = dff.train[which(dff.train$A==1),])
+  # IF_N_X_pi = ranger(A~X1+X2+X3+X4, data = dff.train)
+  # 
+  # # getting fitted values
+  # IF_N_X_mu0_hat = fun.expit(predict(IF_N_X_mu0, data=dff.test)[1][[1]])
+  # IF_N_X_mu1_hat = fun.expit(predict(IF_N_X_mu1, data=dff.test)[1][[1]])
+  # IF_N_X_pi_hat = fun.expit(predict(IF_N_X_pi, data=dff.test)[1][[1]])
+  
+  # defining my pseudo-outcome
+  IF_N_X_ystar = (1/IF_N_X_mu1_hat)*((IF_N_X_mu0_hat/IF_N_X_mu1_hat)*(1/IF_N_X_pi_hat)*A*(Y-IF_N_X_mu1_hat) - 
+                                       (1/(1-IF_N_X_pi_hat))*(1-A)*(Y-IF_N_X_mu0_hat)) + 
+    (IF_N_X_mu1_hat-IF_N_X_mu0_hat)/IF_N_X_mu1_hat
+  
+  # fitting nlm to find beta.hat parameters
+  fun.obj = function(param, theY){
+    #betapointfive = exp(param[1])
+    beta1 = param[1]
+    beta2 = param[2]
+    beta3 = param[3]
+    beta4 = param[4]
+    Sel = A==0
+    phat = 0.5/(1+exp(beta1*X1[Sel] + beta2*X2[Sel] + beta3*X3[Sel] + beta4*X4[Sel]))
+    dens = dbinom(Y[Sel], 1, phat, log=TRUE)
+    return(-sum(dens))
+  }
+  
+  est.params = nlm(fun.obj, c(log(0.5), 0, 0, 0), IF_N_X_ystar, iterlim=10)
+  
+  beta1.hat = est.params[2][[1]][1]
+  beta2.hat = est.params[2][[1]][2]
+  beta3.hat = est.params[2][[1]][3]
+  beta4.hat = est.params[2][[1]][4]
+  
+  # getting predicted values for gamma hat
+  IF_N_X_gammahat = fun.expit(beta1.hat*X1 + beta2.hat*X2 + beta3.hat*X3 + beta4.hat*X4)
+  IF_N_X_gammahat_mean = mean(sample(IF_N_X_gammahat, size = 100))
+  
+  # RMSE
+  IF_N_X_RMSE = sqrt(  mean( (IF_N_X_gammahat_mean - meangamma)^2 )  )
+  
+  # bias
+  IF_N_X_bias = mean(abs(IF_N_X_gammahat_mean - meangamma))
+
+  # sd
+  nabla.gamma.arr = array(dim=c(4,1))
+  nabla.gamma.arr[1,1] = mean(X1*(1-IF_N_X_gammahat)*IF_N_X_gammahat)
+  nabla.gamma.arr[2,1] = mean(X2*(1-IF_N_X_gammahat)*IF_N_X_gammahat)
+  nabla.gamma.arr[3,1] = mean(X3*(1-IF_N_X_gammahat)*IF_N_X_gammahat)
+  nabla.gamma.arr[4,1] = mean(X4*(1-IF_N_X_gammahat)*IF_N_X_gammahat)
+  nabla.gamma = as.matrix(nabla.gamma.arr)
+  
+  nabla.gamma.T = t(nabla.gamma)
+  
+  M.arr = array(dim=c(4,4))
+  M.arr[1,1] = mean(beta1.hat*(1-IF_N_X_gammahat)*IF_N_X_gammahat)
+  M.arr[1,2] = 0
+  M.arr[1,3] = 0
+  M.arr[1,4] = 0
+  M.arr[2,1] = 0
+  M.arr[3,1] = 0
+  M.arr[4,1] = 0
+  M.arr[2,2] = mean(beta2.hat*(1-IF_N_X_gammahat)*IF_N_X_gammahat)
+  M.arr[3,2] = 0
+  M.arr[4,2] = 0
+  M.arr[2,3] = 0
+  M.arr[3,3] = mean(beta3.hat*(1-IF_N_X_gammahat)*IF_N_X_gammahat)
+  M.arr[4,3] = 0
+  M.arr[2,4] = 0
+  M.arr[3,4] = 0
+  M.arr[4,4] = mean(beta4.hat*(1-IF_N_X_gammahat)*IF_N_X_gammahat)
+  
+  M = as.matrix(M.arr)
+  M.inverse = solve(M) # not square...
+  M.T.inverse = solve(t(M))
+  
+  phi = mean(X1*(1-IF_N_X_gammahat)*IF_N_X_gammahat * IF_N_X_ystar - (IF_N_X_mu1_hat - IF_N_X_mu0_hat)/IF_N_X_mu1_hat - IF_N_X_gammahat)
+  phi.arr = array(dim=c(4,4))
+  phi.arr[1,1] = phi
+  phi.arr[1,2] = 0
+  phi.arr[1,3] = 0
+  phi.arr[1,4] = 0
+  phi.arr[2,1] = 0
+  phi.arr[2,2] = phi
+  phi.arr[2,3] = 0
+  phi.arr[2,4] = 0
+  phi.arr[3,1] = 0
+  phi.arr[3,2] = 0
+  phi.arr[3,3] = phi
+  phi.arr[3,4] = 0
+  phi.arr[4,1] = 0
+  phi.arr[4,2] = 0
+  phi.arr[4,3] = 0
+  phi.arr[4,4] = phi
+  phi = as.matrix(phi.arr)
+  
+  EphiphiT = t(phi)*phi
+  
+  sandwich.variance = nabla.gamma.T %*% M.inverse %*% EphiphiT %*% M.T.inverse %*% nabla.gamma
+  
+  IF_N_X_gammahat_sd = sqrt(sandwich.variance)
+  
+  # confidence interval
+  IF_N_X_ci = paste(IF_N_X_gammahat_mean - 2*IF_N_X_gammahat_sd / sqrt(samplesize), 
+                    IF_N_X_gammahat_mean + 2*IF_N_X_gammahat_sd / sqrt(samplesize), 
+                    sep=", ")
+  
+  return(c(IF_N_X_bias, IF_N_X_RMSE, IF_N_X_ci)) 
+}
+
+
+# 7. Influence-function-based estimator, estimate nuisance parameters with plugin parametric transformed Xs ----
+fun.IF_P_Xstar = function(dff){
+  samplesize = nrow(dff)
+  
+  # data splitting
+  index = sample(1:nrow(dff)) # randomize indices
+  dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
+  dff.test = dff[index,][((nrow(dff)/2)+1):nrow(dff),] # make testing set
+  
+  # estimating the nuisance parameters
+  IF_P_Xstar_mu0 = glm(Y~X1+X2+X3+X4, data = dff.train[which(dff.train$A==0),], family = "poisson")
+  IF_P_Xstar_mu1 = glm(Y~X1+X2+X3+X4, data = dff.train[which(dff.train$A==1),], family = "binomial")
+  IF_P_Xstar_pi = glm(A~X1+X2+X3+X4, data = dff.train, family = "binomial")
+  
+  # getting fitted values
+  IF_P_Xstar_mu0_hat = predict(IF_P_Xstar_mu0, newdata = dff.test, type="response")
+  IF_P_Xstar_mu1_hat = predict(IF_P_Xstar_mu1, newdata = dff.test, type="response")
+  IF_P_Xstar_pi_hat = predict(IF_P_Xstar_pi, newdata = dff.test, type="response")
+  
+  # defining my pseudo-outcome
+  IF_P_Xstar_ystar = (1/IF_P_Xstar_mu1_hat)*((IF_P_Xstar_mu0_hat/IF_P_Xstar_mu1_hat)*(1/IF_P_Xstar_pi_hat)*A*(Y-IF_P_Xstar_mu1_hat) - 
+                                               (1/(1-IF_P_Xstar_pi_hat))*(1-A)*(Y-IF_P_Xstar_mu0_hat)) + 
+    (IF_P_Xstar_mu1_hat-IF_P_Xstar_mu0_hat)/IF_P_Xstar_mu1_hat
+  
+  # fitting nlm to find beta.hat parameters
+  fun.obj = function(param, theY){
+    #betapointfive = exp(param[1])
+    beta1 = param[1]
+    beta2 = param[2]
+    beta3 = param[3]
+    beta4 = param[4]
+    Sel = A==0
+    phat = 0.5/(1+exp(beta1*X1star[Sel] + beta2*X2star[Sel] + beta3*X3star[Sel] + beta4*X4star[Sel]))
+    dens = dbinom(Y[Sel], 1, phat, log=TRUE)
+    return(-sum(dens))
+  }
+  
+  est.params = nlm(fun.obj, c(log(0.5), 0, 0, 0), IF_P_Xstar_ystar, iterlim=10)
+  
+  beta1.hat = est.params[2][[1]][1]
+  beta2.hat = est.params[2][[1]][2]
+  beta3.hat = est.params[2][[1]][3]
+  beta4.hat = est.params[2][[1]][4]
+  
+  # getting predicted values for gamma hat
+  IF_P_Xstar_gammahat = fun.expit(beta1.hat*X1star + beta2.hat*X2star + beta3.hat*X3star + beta4.hat*X4star)
+  IF_P_Xstar_gammahat_mean = mean(sample(IF_P_Xstar_gammahat, size = 100))
+
+    # RMSE
+  IF_P_Xstar_RMSE = sqrt(  mean( (IF_P_Xstar_gammahat_mean - meangamma)^2 )  )
+  
+  # bias
+  IF_P_Xstar_bias = mean(abs(IF_P_Xstar_gammahat_mean - meangamma))
+  
+  # # sd
+  # nabla.gamma.arr = array(dim=c(4,1))
+  # nabla.gamma.arr[1,1] = mean(X1star*(1-IF_P_Xstar_gammahat)*IF_P_Xstar_gammahat)
+  # nabla.gamma.arr[2,1] = mean(X2star*(1-IF_P_Xstar_gammahat)*IF_P_Xstar_gammahat)
+  # nabla.gamma.arr[3,1] = mean(X3star*(1-IF_P_Xstar_gammahat)*IF_P_Xstar_gammahat)
+  # nabla.gamma.arr[4,1] = mean(X4star*(1-IF_P_Xstar_gammahat)*IF_P_Xstar_gammahat)
+  # nabla.gamma = as.matrix(nabla.gamma.arr)
+  # 
+  # nabla.gamma.T = t(nabla.gamma)
+  # 
+  # M.arr = array(dim=c(4,4))
+  # M.arr[1,1] = mean(beta1.hat*(1-IF_P_Xstar_gammahat)*IF_P_Xstar_gammahat)
+  # M.arr[1,2] = 0
+  # M.arr[1,3] = 0
+  # M.arr[1,4] = 0
+  # M.arr[2,1] = 0
+  # M.arr[3,1] = 0
+  # M.arr[4,1] = 0
+  # M.arr[2,2] = mean(beta2.hat*(1-IF_P_Xstar_gammahat)*IF_P_Xstar_gammahat)
+  # M.arr[3,2] = 0
+  # M.arr[4,2] = 0
+  # M.arr[2,3] = 0
+  # M.arr[3,3] = mean(beta3.hat*(1-IF_P_Xstar_gammahat)*IF_P_Xstar_gammahat)
+  # M.arr[4,3] = 0
+  # M.arr[2,4] = 0
+  # M.arr[3,4] = 0
+  # M.arr[4,4] = mean(beta4.hat*(1-IF_P_Xstar_gammahat)*IF_P_Xstar_gammahat)
+  # 
+  # M = as.matrix(M.arr)
+  # M.inverse = solve(M) # not square...
+  # M.T.inverse = solve(t(M))
+  # 
+  # phi = mean(X1star*(1-IF_P_Xstar_gammahat)*IF_P_Xstar_gammahat * IF_P_Xstar_ystar
+  #            - (IF_P_Xstar_mu1_hat - IF_P_Xstar_mu0_hat)/IF_P_Xstar_mu1_hat - IF_P_Xstar_gammahat)
+  # phi.arr = array(dim=c(4,4))
+  # phi.arr[1,1] = phi
+  # phi.arr[1,2] = 0
+  # phi.arr[1,3] = 0
+  # phi.arr[1,4] = 0
+  # phi.arr[2,1] = 0
+  # phi.arr[2,2] = phi
+  # phi.arr[2,3] = 0
+  # phi.arr[2,4] = 0
+  # phi.arr[3,1] = 0
+  # phi.arr[3,2] = 0
+  # phi.arr[3,3] = phi
+  # phi.arr[3,4] = 0
+  # phi.arr[4,1] = 0
+  # phi.arr[4,2] = 0
+  # phi.arr[4,3] = 0
+  # phi.arr[4,4] = phi
+  # phi = as.matrix(phi.arr)
+  # 
+  # EphiphiT = t(phi)*phi
+  # 
+  # sandwich.variance = nabla.gamma.T %*% M.inverse %*% EphiphiT %*% M.T.inverse %*% nabla.gamma
+  # 
+  # IF_P_Xstar_gammahat_sd = sqrt(sandwich.variance) # GETTING CRAZY VALUES FOR THIS. WHY??
+
+  # sd 
+  # function: boostrap to estimate confidence interval
+  fun.IF_P_Xstar_boot = function(xthedata){
+
+    # data splitting
+    index = sample(1:nrow(xthedata)) # randomize indices
+    xthedata.train = xthedata[index,][1:(nrow(xthedata)/2),] # make training set
+    xthedata.test = xthedata[index,][((nrow(xthedata)/2)+1):nrow(xthedata),] # make testing set
+
+    # estimating the nuisance parameters
+    IF_P_Xstar_mu0 = glm(Y~X1+X2+X3+X4, data = xthedata.train[which(xthedata.train$A==0),], family = "poisson")
+    IF_P_Xstar_mu1 = glm(Y~X1+X2+X3+X4, data = xthedata.train[which(xthedata.train$A==1),], family = "binomial")
+    IF_P_Xstar_pi = glm(A~X1+X2+X3+X4, data = xthedata.train, family = "binomial")
+
+    # getting fitted values
+    IF_P_Xstar_mu0_hat = predict(IF_P_Xstar_mu0, newdata = xthedata.test, type="response")
+    IF_P_Xstar_mu1_hat = predict(IF_P_Xstar_mu1, newdata = xthedata.test, type="response")
+    IF_P_Xstar_pi_hat = predict(IF_P_Xstar_pi, newdata = xthedata.test, type="response")
+
+    # defining my pseudo-outcome
+    IF_P_Xstar_ystar = (1/IF_P_Xstar_mu1_hat)*((IF_P_Xstar_mu0_hat/IF_P_Xstar_mu1_hat)*(1/IF_P_Xstar_pi_hat)*A*(Y-IF_P_Xstar_mu1_hat) -
+                                                 (1/(1-IF_P_Xstar_pi_hat))*(1-A)*(Y-IF_P_Xstar_mu0_hat)) + (IF_P_Xstar_mu1_hat-IF_P_Xstar_mu0_hat)/IF_P_Xstar_mu1_hat
+
+    # fitting nlm to find beta.hat parameters
+    fun.obj = function(param, theY){
+      #betapointfive = exp(param[1])
+      beta1 = param[1]
+      beta2 = param[2]
+      beta3 = param[3]
+      beta4 = param[4]
+      Sel = A==0
+      phat = 0.5/(1+exp(beta1*X1star[Sel] + beta2*X2star[Sel] + beta3*X3star[Sel] + beta4*X4star[Sel]))
+      dens = dbinom(Y[Sel], 1, phat, log=TRUE)
+      return(-sum(dens))
+    }
+
+    est.params = nlm(fun.obj, c(log(0.5), 0, 0, 0), IF_P_Xstar_ystar, iterlim=10)
+
+    beta1.hat = est.params[2][[1]][1]
+    beta2.hat = est.params[2][[1]][2]
+    beta3.hat = est.params[2][[1]][3]
+    beta4.hat = est.params[2][[1]][4]
+
+    # getting predicted values for gamma hat
+    IF_P_Xstar_gammahat = fun.expit(beta1.hat*X1star + beta2.hat*X2star + beta3.hat*X3star + beta4.hat*X4star)
+    IF_P_Xstar_gammahat_mean = mean(sample(IF_P_Xstar_gammahat, size = 100))
+
+    return(IF_P_Xstar_gammahat_mean)
+  }
+
+  # apply bootstrap
+  bootreps=10
+  IF_P_Xstar_bootvec = 0
+  IF_P_Xstar_bootvec.1 = foreach(i=1:bootreps, .options.multicore=list(preschedule=TRUE)) %dopar% {
+
+    # randomize indices
+    index.b = sample(1:nrow(dff), replace=FALSE)
+
+    # select new sample of rows from dff
+    newdff = dff[index.b,]
+
+    # calculating gammahat_star (star because it's from a bootstrap)
+    IF_P_Xstar_gammahat_star_mean = fun.IF_P_Xstar_boot(newdff)
+
+    # store in a vector
+    IF_P_Xstar_bootvec[i] <- IF_P_Xstar_gammahat_star_mean
+  }
+
+  # Standard error
+  IF_P_Xstar_gammahat_sd = sd(unlist(IF_P_Xstar_bootvec.1), na.rm = TRUE)
+
+  
+    # Confidence interval
+  IF_P_Xstar_ci = paste(IF_P_Xstar_gammahat_mean - 2*IF_P_Xstar_gammahat_sd / sqrt(samplesize),
+                        IF_P_Xstar_gammahat_mean + 2*IF_P_Xstar_gammahat_sd / sqrt(samplesize),
+                        sep=", ")
+  
+  return(c(IF_P_Xstar_bias, IF_P_Xstar_RMSE, IF_P_Xstar_ci))
+  
+}
+
+
+# 8. Influence-function-based estimator, estimate nuisance parameters with plugin nonparametric transformed Xs ----
+fun.IF_N_Xstar = function(dff){
+  samplesize = nrow(dff)
+  
+  # data splitting
+  index = sample(1:nrow(dff)) # randomize indices
+  dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
+  dff.test = dff[index,][((nrow(dff)/2)+1):nrow(dff),] # make testing set
+  
+  # estimating the nuisance parameters
+  IF_N_Xstar_mu0 = randomForest(Y~X1star+X2star+X3star+X4star, data = dff.train[which(dff.train$A==0),], type=regression) #do.trace = 100, 
+  IF_N_Xstar_mu1 = randomForest(Y~X1star+X2star+X3star+X4star, data = dff.train[which(dff.train$A==1),], type=regression)
+  IF_N_Xstar_pi = randomForest(A~X1star+X2star+X3star+X4star, data = dff.train, type=regression)
+  
+  # getting fitted values
+  IF_N_Xstar_mu0_hat = predict(IF_N_Xstar_mu0, newdata = dff.test)
+  IF_N_Xstar_mu1_hat = predict(IF_N_Xstar_mu1, newdata = dff.test)
+  IF_N_Xstar_pi_hat = predict(IF_N_Xstar_pi, newdata = dff.test)
+  
+  # defining my pseudo-outcome
+  IF_N_Xstar_ystar = (1/IF_N_Xstar_mu1_hat)*((IF_N_Xstar_mu0_hat/IF_N_Xstar_mu1_hat)*(1/IF_N_Xstar_pi_hat)*A*(Y-IF_N_Xstar_mu1_hat) - 
+                                               (1/(1-IF_N_Xstar_pi_hat))*(1-A)*(Y-IF_N_Xstar_mu0_hat)) + 
+    (IF_N_Xstar_mu1_hat-IF_N_Xstar_mu0_hat)/IF_N_Xstar_mu1_hat
+  
+  # fitting nlm to find beta.hat parameters
+  fun.obj = function(param, theY){
+    #betapointfive = exp(param[1])
+    beta1 = param[1]
+    beta2 = param[2]
+    beta3 = param[3]
+    beta4 = param[4]
+    Sel = A==0
+    phat = 0.5/(1+exp(beta1*X1star[Sel] + beta2*X2star[Sel] + beta3*X3star[Sel] + beta4*X4star[Sel]))
+    dens = dbinom(Y[Sel], 1, phat, log=TRUE)
+    return(-sum(dens))
+  }
+  
+  est.params = nlm(fun.obj, c(log(0.5), 0, 0, 0), IF_N_Xstar_ystar, iterlim=10)
+  
+  beta1.hat = est.params[2][[1]][1]
+  beta2.hat = est.params[2][[1]][2]
+  beta3.hat = est.params[2][[1]][3]
+  beta4.hat = est.params[2][[1]][4]
+  
+  # getting predicted values for gamma hat
+  IF_N_Xstar_gammahat = fun.expit(beta1.hat*X1star + beta2.hat*X2star + beta3.hat*X3star + beta4.hat*X4star)
+  IF_N_Xstar_gammahat_mean = mean(sample(IF_N_Xstar_gammahat, size = 100))
+  
+  # RMSE
+  IF_N_Xstar_RMSE = sqrt(  mean( (IF_N_Xstar_gammahat_mean - meangamma)^2 )  )
+  
+  # bias
+  IF_N_Xstar_bias = mean(abs(IF_N_Xstar_gammahat_mean - meangamma))
+  
+  # # sd
+  # nabla.gamma.arr = array(dim=c(4,1))
+  # nabla.gamma.arr[1,1] = mean(X1star*(1-IF_N_Xstar_gammahat)*IF_N_Xstar_gammahat)
+  # nabla.gamma.arr[2,1] = mean(X2star*(1-IF_N_Xstar_gammahat)*IF_N_Xstar_gammahat)
+  # nabla.gamma.arr[3,1] = mean(X3star*(1-IF_N_Xstar_gammahat)*IF_N_Xstar_gammahat)
+  # nabla.gamma.arr[4,1] = mean(X4star*(1-IF_N_Xstar_gammahat)*IF_N_Xstar_gammahat)
+  # nabla.gamma = as.matrix(nabla.gamma.arr)
+  # 
+  # nabla.gamma.T = t(nabla.gamma)
+  # 
+  # M.arr = array(dim=c(4,4))
+  # M.arr[1,1] = mean(beta1.hat*(1-IF_N_Xstar_gammahat)*IF_N_Xstar_gammahat)
+  # M.arr[1,2] = 0
+  # M.arr[1,3] = 0
+  # M.arr[1,4] = 0
+  # M.arr[2,1] = 0
+  # M.arr[3,1] = 0
+  # M.arr[4,1] = 0
+  # M.arr[2,2] = mean(beta2.hat*(1-IF_N_Xstar_gammahat)*IF_N_Xstar_gammahat)
+  # M.arr[3,2] = 0
+  # M.arr[4,2] = 0
+  # M.arr[2,3] = 0
+  # M.arr[3,3] = mean(beta3.hat*(1-IF_N_Xstar_gammahat)*IF_N_Xstar_gammahat)
+  # M.arr[4,3] = 0
+  # M.arr[2,4] = 0
+  # M.arr[3,4] = 0
+  # M.arr[4,4] = mean(beta4.hat*(1-IF_N_Xstar_gammahat)*IF_N_Xstar_gammahat)
+  # 
+  # M = as.matrix(M.arr)
+  # M.inverse = solve(M) # not square...
+  # M.T.inverse = solve(t(M))
+  # 
+  # phi = mean(X1star*(1-IF_N_Xstar_gammahat)*IF_N_Xstar_gammahat * IF_N_Xstar_ystar
+  #            - (IF_N_Xstar_mu1_hat - IF_N_Xstar_mu0_hat)/IF_N_Xstar_mu1_hat - IF_N_Xstar_gammahat)
+  # phi.arr = array(dim=c(4,4))
+  # phi.arr[1,1] = phi
+  # phi.arr[1,2] = 0
+  # phi.arr[1,3] = 0
+  # phi.arr[1,4] = 0
+  # phi.arr[2,1] = 0
+  # phi.arr[2,2] = phi
+  # phi.arr[2,3] = 0
+  # phi.arr[2,4] = 0
+  # phi.arr[3,1] = 0
+  # phi.arr[3,2] = 0
+  # phi.arr[3,3] = phi
+  # phi.arr[3,4] = 0
+  # phi.arr[4,1] = 0
+  # phi.arr[4,2] = 0
+  # phi.arr[4,3] = 0
+  # phi.arr[4,4] = phi
+  # phi = as.matrix(phi.arr)
+  # 
+  # EphiphiT = t(phi)*phi
+  # 
+  # sandwich.variance = nabla.gamma.T %*% M.inverse %*% EphiphiT %*% M.T.inverse %*% nabla.gamma
+  # 
+  # IF_N_Xstar_gammahat_sd = sqrt(sandwich.variance) # GETTING CRAZY VALUES FOR THIS. WHY??
+  
+  
+
+  # function: boostrap to estimate confidence interval
+  fun.IF_N_Xstar_boot = function(xthedata){
+
+    # data splitting
+    index = sample(1:nrow(xthedata)) # randomize indices
+    xthedata.train = xthedata[index,][1:(nrow(xthedata)/2),] # make training set
+    xthedata.test = xthedata[index,][((nrow(xthedata)/2)+1):nrow(xthedata),] # make testing set
+
+    # estimating the nuisance parameters
+    IF_N_Xstar_mu0 = randomForest(Y~X1star+X2star+X3star+X4star, data = xthedata.train[which(xthedata.train$A==0),], type=regression) #do.trace = 100,
+    IF_N_Xstar_mu1 = randomForest(Y~X1star+X2star+X3star+X4star, data = xthedata.train[which(xthedata.train$A==1),], type=regression)
+    IF_N_Xstar_pi = randomForest(A~X1star+X2star+X3star+X4star, data = xthedata.train, type=regression)
+
+    # getting fitted values
+    IF_N_Xstar_mu0_hat = predict(IF_N_Xstar_mu0, newdata = xthedata.test)
+    IF_N_Xstar_mu1_hat = predict(IF_N_Xstar_mu1, newdata = xthedata.test)
+    IF_N_Xstar_pi_hat = predict(IF_N_Xstar_pi, newdata = xthedata.test)
+
+    # Defining my pseudo-outcome
+    IF_N_Xstar_ystar = (1/IF_N_Xstar_mu1_hat)*((IF_N_Xstar_mu0_hat/IF_N_Xstar_mu1_hat)*(1/IF_N_Xstar_pi_hat)*A*(Y-IF_N_Xstar_mu1_hat) -
+                                                 (1/(1-IF_N_Xstar_pi_hat))*(1-A)*(Y-IF_N_Xstar_mu0_hat)) +
+      (IF_N_Xstar_mu1_hat-IF_N_Xstar_mu0_hat)/IF_N_Xstar_mu1_hat
+
+    # fitting nlm to find beta.hat parameters
+    fun.obj = function(param, theY){
+      #betapointfive = exp(param[1])
+      beta1 = param[1]
+      beta2 = param[2]
+      beta3 = param[3]
+      beta4 = param[4]
+      Sel = A==0
+      phat = 0.5/(1+exp(beta1*X1star[Sel] + beta2*X2star[Sel] + beta3*X3star[Sel] + beta4*X4star[Sel]))
+      dens = dbinom(Y[Sel], 1, phat, log=TRUE)
+      return(-sum(dens))
+    }
+
+    est.params = nlm(fun.obj, c(log(0.5), 0, 0, 0), IF_N_Xstar_ystar, iterlim=10)
+
+    beta1.hat = est.params[2][[1]][1]
+    beta2.hat = est.params[2][[1]][2]
+    beta3.hat = est.params[2][[1]][3]
+    beta4.hat = est.params[2][[1]][4]
+
+    # getting predicted values for gamma hat
+    IF_N_Xstar_gammahat = fun.expit(beta1.hat*X1star + beta2.hat*X2star + beta3.hat*X3star + beta4.hat*X4star)
+    IF_N_Xstar_gammahat_mean = mean(sample(IF_N_Xstar_gammahat, size = 100))
+
+    return(IF_N_Xstar_gammahat_mean)
+  }
+
+  # apply bootstrap
+  bootreps=2
+  IF_N_Xstar_bootvec = 0
+  IF_N_Xstar_bootvec.1 = foreach(i=1:bootreps, .options.multicore=list(preschedule=TRUE)) %dopar% {
+
+    # randomize indices
+    index.b = sample(1:nrow(dff), replace=FALSE)
+
+    # select new sample of rows from dff
+    newdff = dff[index.b,]
+
+    # calculating gammahat_star (star because it's from a bootstrap)
+    IF_N_Xstar_gammahat_star_mean = fun.IF_N_Xstar_boot(newdff)
+
+    # store in a vector
+    IF_N_Xstar_bootvec[i] <- IF_N_Xstar_gammahat_star_mean
+  }
+
+  # Standard error
+  IF_N_Xstar_gammahat_sd = sd(unlist(IF_N_Xstar_bootvec.1), na.rm = TRUE)
+
+  # Confidence interval
+  IF_N_Xstar_ci = paste(IF_N_Xstar_gammahat_mean - 2*IF_N_Xstar_gammahat_sd / sqrt(samplesize), 
+                        IF_N_Xstar_gammahat_mean + 2*IF_N_Xstar_gammahat_sd / sqrt(samplesize), 
+                        sep=", ")
+  
+  return(c(IF_N_Xstar_bias, IF_N_Xstar_RMSE, IF_N_Xstar_ci))
+}
+
+
+
+
+
+#----
+
+
+# # Repeat simulation for different sample sizes
+all.estimators = c(fun.PI_P_X, fun.PI_P_Xstar, fun.PI_N_X, fun.PI_N_Xstar,
+                   fun.IF_P_X, fun.IF_N_X, fun.IF_P_Xstar, fun.IF_N_Xstar)
+all.estimators.text = c("fun.PI_P_X", "fun.PI_P_Xstar", "fun.PI_N_X", "fun.PI_N_Xstar",
+                        "fun.IF_P_X", "fun.IF_P_Xstar", "fun.IF_N_X", "fun.IF_N_Xstar")
+
+reps = 100
+samplesizes = c(rep(500, reps), rep(1000, reps), rep(10000, reps))
+
+estimators.text = c( "PI_P_X_bias", "PI_P_X_RMSE", "PI_P_X_CI",
+                     "PI_P_Xstar_bias", "PI_P_Xstar_RMSE", "PI_P_Xstar_CI",
+                     "PI_N_X_bias", "PI_N_X_RMSE", "PI_N_X_CI",
+                     "PI_N_Xstar_bias", "PI_N_Xstar_RMSE", "PI_N_Xstar_CI",
+                     "IF_P_X_bias", "IF_P_X_RMSE", "IF_P_X_CI",
+                     "IF_P_Xstar_bias", "IF_P_Xstar_RMSE", "IF_P_Xstar_CI",
+                     "IF_N_X_bias", "IF_N_X_RMSE", "IF_N_X_CI",
+                     "IF_N_Xstar_bias", "IF_N_Xstar_RMSE", "IF_N_Xstar_CI"
+                    )
+
+# fill array out with the simulation
+thelength = length(estimators.text)
+arr <- array(dim=c(length(samplesizes), thelength+1))
+colnames(arr) <- c("samplesize", estimators.text)
+arr[1:length(samplesizes),1] = samplesizes
+arr
+
+for( s in 1:length(samplesizes) ){
+  
+  samplesize = samplesizes[s]
+  dat = fun.generate.data(samplesizes[s])
+  
+  results.list = list()
+  results = foreach(i=1:8, .options.multicore=list(preschedule=TRUE)) %dopar% {
+    # store in a list
+    results.list[[i]] = all.estimators[i][[1]](dat)
+  }
+  
+  arr[s, estimators.text[1]] = results[[1]][1]
+  arr[s, estimators.text[2]] = results[[1]][2]
+  arr[s, estimators.text[3]] = results[[1]][3]
+  arr[s, estimators.text[4]] = results[[2]][1]
+  arr[s, estimators.text[5]] = results[[2]][2]
+  arr[s, estimators.text[6]] = results[[2]][3]
+  arr[s, estimators.text[7]] = results[[3]][1]
+  arr[s, estimators.text[8]] = results[[3]][2]
+  arr[s, estimators.text[9]] = results[[3]][3]
+  arr[s, estimators.text[10]] = results[[4]][1]
+  arr[s, estimators.text[11]] = results[[4]][2]
+  arr[s, estimators.text[12]] = results[[4]][3]
+
+  arr[s, estimators.text[13]] = results[[5]][1]
+  arr[s, estimators.text[14]] = results[[5]][2]
+  arr[s, estimators.text[15]] = results[[5]][3]
+  arr[s, estimators.text[16]] = results[[6]][1]
+  arr[s, estimators.text[17]] = results[[6]][2]
+  arr[s, estimators.text[18]] = results[[6]][3]
+  arr[s, estimators.text[19]] = results[[7]][1]
+  arr[s, estimators.text[20]] = results[[7]][2]
+  arr[s, estimators.text[21]] = results[[7]][3]
+  arr[s, estimators.text[22]] = results[[8]][1]
+  arr[s, estimators.text[23]] = results[[8]][2]
+  arr[s, estimators.text[24]] = results[[8]][3]
+}
+
+arr
+df.sim = as.data.frame(arr)
+
+
+setwd(WD_simulation)
+#save(df.sim, file="df.sim.fin-2017-10-14.rda")
+load("df.sim.fin-2017-10-14.rda")
+
+
+
+
+# Estimating coverage
+reps=2
+samplesizes = c(rep(500, reps), rep(1000, reps), rep(10000, reps))
+
+coverage.text = c("PI_P_X_coverage", "PI_P_Xstar_coverage", "PI_N_X_coverage", "PI_N_Xstar_coverage", 
+                  "IF_P_X_coverage", "IF_P_Xstar_coverage", "IF_N_X_coverage", "IF_N_Xstar_coverage" )
+
+cis.text = c( "PI_P_X_CI", "PI_P_Xstar_CI", "PI_N_X_CI", "PI_N_Xstar_CI", 
+              "IF_P_X_CI", "IF_P_Xstar_CI", "IF_N_X_CI", "IF_N_Xstar_CI" )
+
+dfs = c("df.sim.500", "df.sim.1000", "df.sim.10000")
+
+thelength = length(cis.text)
+arr.coverage <- array(dim=c(length(samplesizes), thelength+1))
+colnames(arr.coverage) <- c("samplesize", cis.text)
+arr.coverage[1:length(samplesizes),1] = samplesizes
+arr.coverage
+
+fun.coverage = function(var){
+  LB = as.numeric(strsplit(var[1], ",")[[1]][1])
+  UB = as.numeric(strsplit(var[1], ",")[[1]][2])
+  coverage =  ifelse(LB <= meangamma & meangamma <= UB, 1, 0)
+  return(coverage) 
+}
+
+for(i in 1:length(samplesizes)){ # rotate over dfs, one per samplesize
+  thedf = df.sim #get(dfs[i])
+  thedf = thedf[, which( grepl("CI", names(thedf) ))  ]
+  
+    for(e in 1:length(names(thedf))){ # rotate over estimators
+    est = thedf[e][1]
+    
+      for(s in 1:nrow(thedf)){ # rotate over samplesizes within df
+      ci = as.character(get(cis.text[e])[1])
+      arr.coverage[s, names(est)] = fun.coverage(ci)
+      }
+    }
+}
+
+df.coverage = as.data.frame(arr.coverage)
+names(df.coverage) = c("samplesize", coverage.text)
+
+# separate by sample size # NOTE: These change if I decided to use different sample sizes
+df.sim.500 <- df.coverage[which(df.coverage$samplesize==500),]
+df.sim.1000 <- df.coverage[which(df.coverage$samplesize==1000),]
+df.sim.10000 <- df.coverage[which(df.coverage$samplesize==10000),]
+
+# mean coverage by estimator
+coverage.text = c("PI_P_X_coverage", "PI_P_Xstar_coverage", "PI_N_X_coverage", "PI_N_Xstar_coverage", 
+                  "IF_P_X_coverage", "IF_P_Xstar_coverage", "IF_N_X_coverage", "IF_N_Xstar_coverage" )
+
+cove.arr <- array(dim=c(length(samplesizes), length(coverage.text)+1))
+colnames(cove.arr) <- c("samplesize", coverage.text)
+cove.arr[1:length(samplesizes),1] = samplesizes
+cove.arr
+
+i=j=1
+for(j in 1:length(coverage.text)){
+  for(i in 1:dim(df.sim.500)[1]){
+  cove.arr[i,j+1] = colMeans(df.sim.500)[j+1]
+  }
+}
+
+for(j in 1:length(coverage.text)){
+  for(i in 1:dim(df.sim.1000)[1]){
+    cove.arr[i+dim(df.sim.500)[1],j+1] = colMeans(df.sim.1000)[j+1]
+  }
+}
+
+for(j in 1:length(coverage.text)){
+  for(i in 1:dim(df.sim.10000)[1]){
+    cove.arr[i+dim(df.sim.500)[1]+dim(df.sim.1000)[1],j+1] = colMeans(df.sim.10000)[j+1]
+  }
+}
+cove.arr
+cov.df = as.data.frame(cove.arr)
+
+# Making the barplot with error bars
+
+df.sim2 = merge(df.sim1, cov.df ,by="samplesize")
+
+
+# reshape data frame from simulation, df.sim
+aa = melt(data = df.sim2, id.vars = "samplesize", 
+          variable.name = "Algorithm", value.name = "Value")
+aa
+
+dat=aa
+dat = rename.vars(dat, from = "variable", to = "Algorithm")
+dat = rename.vars(dat, from = "value", to = "Value")
+dat = rename.vars(dat, from = "samplesize", to = "Sample_size")
+head(dat)
+
+dat$Sample_size = as.factor(dat$Sample_size)
+dat$bias = ifelse(str_detect(dat$Algorithm, "bias"), 1, 0)
+dat$RMSE = ifelse(str_detect(dat$Algorithm, "RMSE"), 1, 0)
+dat$coverage = ifelse(str_detect(dat$Algorithm, "coverage"), 1, 0)
+dat$Value = as.numeric(dat$Value)
+
+# Define function for mean and sd
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      sd = sd(x[[col]], na.rm=TRUE))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- rename(data_sum, c("mean" = varname))
+  return(data_sum)
+}
+
+
+
+# Create new dataframe for barplot
+dfsum = data_summary(data = dat, varname = "Value", groupnames = c("Sample_size", "Algorithm"))
+dfsum$Algorithm = as.factor(dfsum$Algorithm)
+dfsum$theindex = 1:dim(dfsum)[1]
+dfsum$Stat = ifelse(dfsum$theindex %in% grep("bias", dfsum$Algorithm), "Bias", 
+                    ifelse(dfsum$theindex %in% grep("coverage", dfsum$Algorithm), "Coverage", "RMSE")
+)
+dfsum$Stat = as.factor(dfsum$Stat)
+dfsum$Algorithm_type = ifelse(dfsum$theindex %in% grep("PI_", dfsum$Algorithm), "Plugin", "Proposed")
+dfsum$cormispnp = 0
+dfsum$cormispnp = ifelse((str_detect(dfsum$Algorithm, "_X_")& str_detect(dfsum$Algorithm, "_P_")), "Cor P", dfsum$cormispnp)
+dfsum$cormispnp = ifelse((str_detect(dfsum$Algorithm, "_Xstar_")& str_detect(dfsum$Algorithm, "_P_")), "Mis P", dfsum$cormispnp)
+dfsum$cormispnp = ifelse((str_detect(dfsum$Algorithm, "_X_")& str_detect(dfsum$Algorithm, "_N_")), "Cor NP", dfsum$cormispnp)
+dfsum$cormispnp = ifelse((str_detect(dfsum$Algorithm, "_Xstar_")& str_detect(dfsum$Algorithm, "_N_")), "Mis NP", dfsum$cormispnp)
+dfsum$cormispnp = as.factor(dfsum$cormispnp)
+dfsum$cormispnp = factor(dfsum$cormispnp,c("Cor P","Mis P","Cor NP", "Mis NP"))
+dfsum$Sample_sizes = paste("n=", dfsum$Sample_size, sep="")
+dfsum$Sample_sizes = factor(dfsum$Sample_sizes,c("n=200","n=1000", "n=10000")) # THIS CHANGES IF SAMPLE SIZES CHANGE
+dfsum
+
+str(dfsum$Stat)
+dfsum$Stat <- relevel(dfsum$Stat, "RMSE")
+
+
+bp = ggplot(dfsum, aes(x=cormispnp, y=Value, fill=Algorithm_type)) + 
+  geom_bar(stat="identity", color="black", position="dodge", width=.5) +
+  #geom_errorbar(aes(ymin=Value-sd, ymax=Value+sd), width=.2, position = position_dodge(.5)) +
+  ggtitle("Plug-in vs. proposed influence-function estimators, 10 iterations per sample size") + xlab("") + ylab("")
+
+bp + facet_grid(Stat ~ Sample_sizes, scales = "free_y", switch = "y") + 
+  theme_bw() + scale_fill_manual("legend", values = c("Plugin" = "black", "Proposed" = "gray"))
+
+
+setwd(WD_figs)
+pdf("20171014__Barplot.pdf", width=10, height=7)
+bp + facet_grid(Stat ~ Sample_sizes, scales = "free_y", switch = "y") + theme_bw()# + theme_minimal() 
+dev.off()
+
+
