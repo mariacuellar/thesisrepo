@@ -2,12 +2,18 @@
 # # November 15, 2017 
 # # Making my own simulation for the parameter of interest: PC = gamma = 1-1/RR = 1-mu0/mu1.
 # 
+
+
+# -----------------------
+# Preamble
+# -----------------------
+
 # # define working directory
 WD_figs = "/home/mcuellar"
 WD_thesis = "/home/mcuellar/Thesis"
 WD_simulation = "/home/mcuellar/Thesis"
 
-library(clusterPower) # lets me use expit function
+library(xtable)
 library(plyr)
 library(randomForest) # lets me do random forests
 library(reshape2)
@@ -27,13 +33,20 @@ options(warn=-1)
 #debug(fun.simulate)
 
 
-# Function to simulate estimation of PC (gamma) as plugin, nonparametric, parametric IF, and nonparametric IF
 
-samplesize = 2000 # test
+# -----------------------
+# Function to simulate estimation of PC (gamma) as plugin, nonparametric, parametric IF, and nonparametric IF
+# -----------------------
+
+# samplesize = 2000 # for testing function
 fun.simulate = function(samplesize){
-  # set.seed(400) # seed for random number generator
   # let us know how far it's gone
   cat(paste(samplesize,"... "))
+  
+  
+  # -----------------------
+  # Create true values
+  # -----------------------
   
   # true parameters
   index = 1:samplesize
@@ -91,7 +104,11 @@ fun.simulate = function(samplesize){
   
   # now getting into the models ---
   
+  
+  # -----------------------
   # Plug-in, parametric, untransformed X's (correctly specified model)
+  # -----------------------
+
   # data splitting
   index = sample(1:nrow(dff)) # randomize indices
   dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
@@ -133,7 +150,10 @@ fun.simulate = function(samplesize){
   
   
   
+  # -----------------------
   # Plug-in, parametric, transformed X's (misspecified model)
+  # -----------------------
+
   # data splitting
   index = sample(1:nrow(dff)) # randomize indices
   dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
@@ -175,9 +195,10 @@ fun.simulate = function(samplesize){
   
   
   
-  # Plug-in, nonparametric, untransformed X's estimator:
-  # RandomForest----
-  # Fitting model
+  # -----------------------
+  # Plug-in, nonparametric, untransformed X's estimator (random forest):
+  # -----------------------
+
   # data splitting
   index = sample(1:nrow(dff)) # randomize indices
   dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
@@ -213,13 +234,14 @@ fun.simulate = function(samplesize){
   PI_N_X_ci_mypoint = paste(NA, NA, sep=", ")
   
   
+  
+  
+  
+  
+  # -----------------------
+  # Plug-in, nonparametric, transformed X's estimator (random forest):
+  # -----------------------
 
-  
-  
-  # Plug-in, nonparametric, transformed X's estimator:
-  
-  # RandomForest----
-  # Fitting model
   # data splitting
   index = sample(1:nrow(dff)) # randomize indices
   dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
@@ -259,8 +281,10 @@ fun.simulate = function(samplesize){
   
   
   
-  
-  #  Influence-function-based estimator, estimate nuisance parameters with plugin parametric untransformed Xs ----
+  # -----------------------
+  # Influence-function-based estimator, estimate nuisance parameters with plugin parametric untransformed Xs ----
+  # -----------------------
+
   # data splitting
   index = sample(1:nrow(dff)) # randomize indices
   dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
@@ -276,14 +300,14 @@ fun.simulate = function(samplesize){
   IF_P_X_mu1_hat = predict(IF_P_X_mu1, newdata = dff.test, type="response")
   IF_P_X_pi_hat = predict(IF_P_X_pi, newdata=dff.test, type="response")
   
-  # Defining my pseudo-outcome
+  # defining my pseudo-outcome
   mu0 = IF_P_X_mu0_hat
   mu1 = IF_P_X_mu1_hat
   pi = IF_P_X_pi_hat
   
   IF_P_X_ystar = (1/mu1)*((mu0/mu1)*(1/pi)*A*(Y-mu1) - (1/(1-pi))*(1-A)*(Y-mu0)) + (1 - mu0/mu1)
   
-  # Fitting model
+  # fitting model
   fun.obj = function(param, theY){
     
     beta1 = param[1]
@@ -310,7 +334,7 @@ fun.simulate = function(samplesize){
   result_optim = optim(f = fun.obj, p = fake_values, theY = IF_P_X_ystar, lower=c(-2,-2,-2,-2), upper=c(2,2,2,2)) #, control=list(trace=TRUE))
   betahat = result_optim$par
   
-  # Getting predicted values
+  # getting predicted values
   X = t(as.matrix(cbind(X1, X2, X3, X4)))
   IF_P_X_gammahat = expit(t(X) %*% as.matrix(betahat))
   IF_P_X_gammahat_mypoint = expit(t(as.matrix(mypoint)) %*% as.matrix(betahat))
@@ -319,11 +343,11 @@ fun.simulate = function(samplesize){
   IF_P_X_RMSE = mean( (IF_P_X_gammahat - gamma)^2 )
   IF_P_X_RMSE_mypoint =  (IF_P_X_gammahat_mypoint - gamma_mypoint)^2
   
-  # Bias
+  # bias
   IF_P_X_bias = abs(IF_P_X_gammahat - gamma)
   IF_P_X_bias_mypoint = abs(IF_P_X_gammahat_mypoint - gamma_mypoint)
   
-  # variance
+  # variance from sandwich (as opposed to bootstrap)
   estgammahat = IF_P_X_gammahat
   estystar = IF_P_X_ystar
   estmod = betahat
@@ -398,11 +422,10 @@ fun.simulate = function(samplesize){
   
   
   
-  
-  
-  
+  # -----------------------
   #  Influence-function-based estimator, estimate nuisance parameters with plugin parametric transformed Xs ----
-  #  Defining the nuisance parameters
+  # -----------------------
+  
   # data splitting
   index = sample(1:nrow(dff)) # randomize indices
   dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
@@ -418,14 +441,14 @@ fun.simulate = function(samplesize){
   IF_P_Xstar_mu1_hat = predict(IF_P_Xstar_mu1, newdata = dff.test, type="response")
   IF_P_Xstar_pi_hat = predict(IF_P_Xstar_pi, newdata=dff.test, type="response")
   
-  # Defining my pseudo-outcome
+  # defining my pseudo-outcome
   mu0 = IF_P_Xstar_mu0_hat
   mu1 = IF_P_Xstar_mu1_hat
   pi = IF_P_Xstar_pi_hat
   
   IF_P_Xstar_ystar = (1/mu1)*((mu0/mu1)*(1/pi)*A*(Y-mu1) - (1/(1-pi))*(1-A)*(Y-mu0)) + (1 - mu0/mu1)
   
-  # Fitting model
+  # fitting model
   fun.obj = function(param, theY){
     
     beta1 = param[1]
@@ -452,7 +475,7 @@ fun.simulate = function(samplesize){
   result_optim = optim(f = fun.obj, p = true_values, theY = IF_P_Xstar_ystar)#, lower=c(-2,-2,-2,-2), upper=c(2,2,2,2))#,control=list(trace=TRUE))
   betahat = result_optim$par
   
-  # Getting predicted values
+  # getting predicted values
   IF_P_Xstar_gammahat = expit(betahat[1]*X1star + betahat[2]*X2star + betahat[3]*X3star + betahat[4]*X4star)
   IF_P_Xstar_gammahat_mypoint = expit(betahat[1]*mypoint[1] + betahat[2]*mypoint[2] + betahat[3]*mypoint[3] + betahat[4]*mypoint[4])
   
@@ -460,11 +483,11 @@ fun.simulate = function(samplesize){
   IF_P_Xstar_RMSE = mean( (IF_P_Xstar_gammahat - gamma)^2 )
   IF_P_Xstar_RMSE_mypoint =  (IF_P_Xstar_gammahat_mypoint - gamma_mypoint)^2
   
-  # Bias
+  # bias
   IF_P_Xstar_bias = abs(IF_P_Xstar_gammahat - gamma)
   IF_P_Xstar_bias_mypoint = abs(IF_P_Xstar_gammahat_mypoint - gamma_mypoint)
   
-  # variance
+  # variance from sandwich (as opposed to bootstrap)
   estgammahat = IF_P_Xstar_gammahat
   estystar = IF_P_Xstar_ystar
   estmod = betahat
@@ -536,14 +559,13 @@ fun.simulate = function(samplesize){
   
   
   
+
   
   
-  
-  
-  
-  
+  # -----------------------
   #  Influence-function-based estimator, estimate nuisance parameters with plugin nonparametric untransformed Xs ----
-  #  Defining the nuisance parameters
+  # -----------------------
+  
   # data splitting
   index = sample(1:nrow(dff)) # randomize indices
   dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
@@ -605,8 +627,7 @@ fun.simulate = function(samplesize){
   IF_N_X_bias = abs(IF_N_X_gammahat - gamma)
   IF_N_X_bias_mypoint = abs(IF_N_X_gammahat_mypoint - gamma_mypoint)
   
-  # variance
-  # variance
+  # variance from sandwich (as opposed to bootstrap)
   estgammahat = IF_N_X_gammahat
   estystar = IF_N_X_ystar
   estmod = betahat
@@ -680,10 +701,10 @@ fun.simulate = function(samplesize){
   
   
   
+  # -----------------------
+  # Influence-function-based estimator, estimate nuisance parameters with plugin nonparametric transformed Xs ----
+  # -----------------------
   
-  
-  #  Influence-function-based estimator, estimate nuisance parameters with plugin nonparametric transformed Xs ----
-  #  Defining the nuisance parameters
   # data splitting
   index = sample(1:nrow(dff)) # randomize indices
   dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
@@ -694,19 +715,19 @@ fun.simulate = function(samplesize){
   IF_N_Xstar_mu1 = randomForest(Y~X1star+X2star+X3star+X4star, data = dff.train[which(dff.train$A==1),], type=regression)
   IF_N_Xstar_pi = randomForest(A~X1star+X2star+X3star+X4star, data = dff.train, type=regression)
   
-  # Getting fitted values (after inverse link function)
+  # getting fitted values (after inverse link function)
   IF_N_Xstar_mu0_hat = as.numeric(predict(IF_N_Xstar_mu0, newdata=dff.test)) # with random forest
   IF_N_Xstar_mu1_hat = as.numeric(predict(IF_N_Xstar_mu1, newdata=dff.test))
   IF_N_Xstar_pi_hat = as.numeric(predict(IF_N_Xstar_pi, newdata=dff.test))
   
-  # Defining my pseudo-outcome
+  # defining my pseudo-outcome
   mu0 = IF_N_Xstar_mu0_hat
   mu1 = IF_N_Xstar_mu1_hat
   pi = IF_N_Xstar_pi_hat
   
   IF_N_Xstar_ystar = (1/mu1)*((mu0/mu1)*(1/pi)*A*(Y-mu1) - (1/(1-pi))*(1-A)*(Y-mu0)) + (1 - mu0/mu1)
   
-  # Fitting model
+  # fitting model
   fun.obj = function(param, theY){
     
     beta1 = param[1]
@@ -733,7 +754,7 @@ fun.simulate = function(samplesize){
   result_optim = optim(f = fun.obj, p = true_values, theY = IF_N_Xstar_ystar)#, lower=c(-2,-2,-2,-2), upper=c(2,2,2,2))#,control=list(trace=TRUE))
   betahat = result_optim$par
   
-  # Getting predicted values
+  # getting predicted values
   IF_N_Xstar_gammahat = expit(betahat[1]*X1star + betahat[2]*X2star + betahat[3]*X3star + betahat[4]*X4star)
   IF_N_Xstar_gammahat_mypoint = expit(betahat[1]*mypoint[1] + betahat[2]*mypoint[2] + betahat[3]*mypoint[3] + betahat[4]*mypoint[4])
   
@@ -741,11 +762,11 @@ fun.simulate = function(samplesize){
   IF_N_Xstar_RMSE = mean( (IF_N_Xstar_gammahat - gamma)^2 )
   IF_N_Xstar_RMSE_mypoint =  (IF_N_Xstar_gammahat_mypoint - gamma_mypoint)^2
   
-  # Bias
+  # bias
   IF_N_Xstar_bias = mean( abs(IF_N_Xstar_gammahat - gamma) )
   IF_N_Xstar_bias_mypoint = mean( abs(IF_N_Xstar_gammahat_mypoint - gamma_mypoint) )
   
-  # variance
+  # variance from sandwich (as opposed to bootstrap)
   estgammahat = IF_N_Xstar_gammahat
   estystar = IF_N_Xstar_ystar
   estmod = betahat
@@ -817,17 +838,14 @@ fun.simulate = function(samplesize){
   
   
   
+  
   # Function will return this
   toreturn = c(PI_P_X_RMSE_mypoint, PI_P_Xstar_RMSE_mypoint, PI_N_X_RMSE_mypoint, PI_N_Xstar_RMSE_mypoint,
                IF_P_X_RMSE_mypoint, IF_P_Xstar_RMSE_mypoint, IF_N_X_RMSE_mypoint, IF_N_Xstar_RMSE_mypoint,
                PI_P_X_bias_mypoint, PI_P_Xstar_bias_mypoint, PI_N_X_bias_mypoint, PI_N_Xstar_bias_mypoint,
                IF_P_X_bias_mypoint, IF_P_Xstar_bias_mypoint, IF_N_X_bias_mypoint, IF_N_Xstar_bias_mypoint)
-
-  # toreturn = c(PI_P_X_RMSE, PI_P_Xstar_RMSE, PI_N_X_RMSE, PI_N_Xstar_RMSE,
-  #              IF_P_X_RMSE, IF_P_Xstar_RMSE, IF_N_X_RMSE, IF_N_Xstar_RMSE,
-  #              PI_P_X_bias_mypoint, PI_P_Xstar_bias_mypoint, PI_N_X_bias_mypoint, PI_N_Xstar_bias_mypoint,
-  #              IF_P_X_bias_mypoint, IF_P_Xstar_bias_mypoint, IF_N_X_bias_mypoint, IF_N_Xstar_bias_mypoint)
   
+
   return(toreturn)
   
   # #Change it to this for estimating coverage
@@ -837,24 +855,15 @@ fun.simulate = function(samplesize){
   
 }
 
+fun.simulate(500) # for testing
 
-fun.simulate(200)
-fun.simulate(200)
-fun.simulate(200)
-fun.simulate(200)
 
-fun.simulate(500)
-fun.simulate(500)
-fun.simulate(500)
-fun.simulate(500)
 
-fun.simulate(1000)
-fun.simulate(1000)
 
-barplot(fun.simulate(2000))
+# -----------------------
+# Run simulation for different sample sizes and repetitions
+# -----------------------
 
-# 
-# # Repeat simulation for different sample sizes
 reps = 100
 samplesizes = c(rep(200, reps), rep(1000, reps), rep(10000, reps))
 # samplesizes = c(rep(1000, reps), rep(2000, reps))
@@ -906,13 +915,17 @@ save(df.sim, file="df.sim.fin-2017-10-27_singlex_notgivingitpi.rda")
 
 
 
-# Making barplot with error bars
+
+
+# -----------------------
+# Make barplot with bars for simulation variability
+# -----------------------
+
 # Reshape data frame from simulatin, df.sim
 aa = melt(data = df.sim, id.vars = "sample_sizes", variable.name = "Algorithm", value.name = "Value")
 dat = rename(aa, c(sample_sizes = "Sample_Size"))
 dat$Sample_Size = as.factor(dat$Sample_Size)
 #dat$Stat = c(rep(0,dim(dat)[1]/2), rep(1, dim(dat)[1]/2))
-
 
 
 
@@ -928,9 +941,6 @@ data_summary <- function(data, varname, groupnames){
   data_sum <- rename(data_sum, c("mean" = varname))
   return(data_sum)
 }
-
-
-
 
 
 
@@ -956,50 +966,34 @@ dfsum$Sample_Sizes = factor(dfsum$Sample_Sizes,c("n=200","n=1000", "n=10000")) #
 
 dfsum
 
- dfsum[2,"sd"] = dfsum[1,"sd"]
- dfsum[2,"Value"] = dfsum[1,"Value"]
- dfsum[10,"sd"] = dfsum[1,"sd"]
- dfsum[10,"Value"] = dfsum[1,"Value"]
- dfsum[18,"sd"] = dfsum[1,"sd"]
- dfsum[18,"Value"] = dfsum[1,"Value"]
- dfsum[26,"sd"] = dfsum[25,"sd"]
- dfsum[26,"Value"] = dfsum[25,"Value"]
- # dfsum[34,"sd"] = dfsum[35,"sd"]
- # dfsum[34,"Value"] = dfsum[35,"Value"]
- 
- bp = ggplot(dfsum, aes(x=cormispnp, y=Value, fill=Algorithm_type)) +
-  geom_bar(stat="identity", color="black", position="dodge", width=.5) 
- +
-  geom_errorbar(aes(ymin=Value-sd/sqrt(as.numeric(Sample_Size)), ymax=Value+sd/sqrt(as.numeric(Sample_Size))), width=.2, position = position_dodge(.5)) + xlab("") + ylab("")
-#+ ggtitle("Plug-in vs. proposed influence-function estimators, 100 repetitions, \n for single point, x=(0.1, 0.1, 0.1, 0.1).") + xlab("") + ylab("")
+# Getting some super variable numbers here for misspecified parametric model. Changing them for now to make the plot look better.
+# Why do they always happen at these iterations (2, 10, 18, 26)? Strange.
+# dfsum[2,"sd"] = dfsum[1,"sd"]
+# dfsum[2,"Value"] = dfsum[1,"Value"]
+# dfsum[10,"sd"] = dfsum[1,"sd"]
+# dfsum[10,"Value"] = dfsum[1,"Value"]
+# dfsum[18,"sd"] = dfsum[1,"sd"]
+# dfsum[18,"Value"] = dfsum[1,"Value"]
+# dfsum[26,"sd"] = dfsum[25,"sd"]
+# dfsum[26,"Value"] = dfsum[25,"Value"]
+# dfsum[34,"sd"] = dfsum[35,"sd"]
+# dfsum[34,"Value"] = dfsum[35,"Value"]
 
+
+# View barplot in Rstudio
+bp = ggplot(dfsum, aes(x=cormispnp, y=Value, fill=Algorithm_type)) +
+  geom_bar(stat="identity", color="black", position="dodge", width=.5) 
 bp + facet_grid(Stat ~ Sample_Sizes, scales = "free_y", switch = "y") + theme_bw() #+ theme_minimal()
 
-
-dfsumRMSE1 = dfsum[which(dfsum$Stat=="RMSE"),]
-dfsumRMSE = aggregate(Sample_Size ~ Algorithm + Value + sd + Stat+ Algorithm_type + cormispnp + Sample_Sizes, dfsumRMSE1, mean)
-head(dfsumRMSE)
-
-dfsumRMSE$X_Specification = 0
-dfsumRMSE$X_Specification = ifelse(  grepl("Cor", dfsumRMSE$cormispnp), "Correct", "Misspecified")
-dfsumRMSE$PorNP = 0
-dfsumRMSE$PorNP = ifelse(  grepl("NP", dfsumRMSE$cormispnp), "Nonparametric", "Parametric")
-
-dfsumRMSE$PorNP = factor(dfsumRMSE$PorNP, levels = c("Parametric", "Nonparametric"))
+# Barplot with error bars
+# bp = ggplot(dfsum, aes(x=cormispnp, y=Value, fill=Algorithm_type)) +
+#      geom_bar(stat="identity", color="black", position="dodge", width=.5) +
+#      geom_errorbar(aes(ymin=Value-sd/sqrt(as.numeric(Sample_Size)), ymax=Value+sd/sqrt(as.numeric(Sample_Size))), width=.2, position = position_dodge(.5)) + xlab("") + ylab("") +
+#      ggtitle("Plug-in vs. proposed influence-function estimators, 100 repetitions, \n for single point, x=(0.1, 0.1, 0.1, 0.1).") + xlab("") + ylab("")
+# bp + facet_grid(Stat ~ Sample_Sizes, scales = "free_y", switch = "y") + theme_bw() #+ theme_minimal()
 
 
-
-pdf(file="lineplots_bw.pdf", width=9, height=3)
-lp = ggplot(data=dfsumRMSE, aes(x=Sample_Sizes, y=Value, colour=Algorithm_type, shape = X_Specification, group = interaction(Algorithm_type, X_Specification)) ) + 
-  geom_line(aes(linetype=X_Specification)) + geom_point(size = 2.5) + facet_grid(Stat ~ PorNP, scales = "free_y", switch = "y") + ylab(NULL)
-lp + theme_minimal() + theme_bw() + scale_colour_grey(start = 0, end = .5) 
-dev.off()
-
-
-
-
-
-# Barplot in color and in black and white
+# Export barplot in color and in black and white
 pdf(file="2017-11-12-barplot_final_mypointx_color.pdf", width=9, height=5)
 bp + facet_grid(Stat ~ Sample_Sizes, scales = "free_y", switch = "y") + theme_bw() #+ theme_minimal()
 dev.off()
@@ -1013,6 +1007,37 @@ dev.off()
 
 
 
+# -----------------------
+# Make lineplots to compare RMSE for the different estimators
+# -----------------------
+
+dfsumRMSE1 = dfsum[which(dfsum$Stat=="RMSE"),]
+dfsumRMSE = aggregate(Sample_Size ~ Algorithm + Value + sd + Stat+ Algorithm_type + cormispnp + Sample_Sizes, dfsumRMSE1, mean)
+head(dfsumRMSE)
+
+dfsumRMSE$X_Specification = 0
+dfsumRMSE$X_Specification = ifelse(  grepl("Cor", dfsumRMSE$cormispnp), "Correct", "Misspecified")
+dfsumRMSE$PorNP = 0
+dfsumRMSE$PorNP = ifelse(  grepl("NP", dfsumRMSE$cormispnp), "Nonparametric", "Parametric")
+
+dfsumRMSE$PorNP = factor(dfsumRMSE$PorNP, levels = c("Parametric", "Nonparametric"))
+
+
+pdf(file="lineplots_bw.pdf", width=9, height=3)
+lp = ggplot(data=dfsumRMSE, aes(x=Sample_Sizes, y=Value, colour=Algorithm_type, shape = X_Specification, group = interaction(Algorithm_type, X_Specification)) ) + 
+  geom_line(aes(linetype=X_Specification)) + geom_point(size = 2.5) + facet_grid(Stat ~ PorNP, scales = "free_y", switch = "y") + ylab(NULL)
+lp + theme_minimal() + theme_bw() + scale_colour_grey(start = 0, end = .5) 
+dev.off()
+
+
+
+
+
+
+
+# -----------------------
+# Summary table of bias and RMSE values
+# -----------------------
 
 dfsum2 = dfsum
 
@@ -1083,8 +1108,6 @@ arr.table[4,6] = paste( round(dfsum2[which(dfsum2$Algorithm=="Influence_fun_nonp
 arr.table[6,6] = paste( round(dfsum2[which(dfsum2$Algorithm=="Influence_fun_nonp_mis_bias"),]$Value[3], 2),
                         " (", round(dfsum2[which(dfsum2$Algorithm=="Influence_fun_nonp_mis_RMSE"),]$Value[1], 2), ")", sep="")
 
-# install.packages("xtable")
-library(xtable)
 print(xtable(arr.table, type = "latex"), include.rownames=FALSE, file = "2017-11-07-tabresults1.tex")
 
 
