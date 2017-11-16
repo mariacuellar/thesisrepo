@@ -3,7 +3,15 @@
 # # Estimating the probability of causation for the RCT described (and with data) here 
 # # https://www.povertyactionlab.org/evaluation/cleaning-springs-kenya
 # 
+# To do: 
+# - Make scalable so code can be used with any number of covariates.
+# - Cross validation in estimation because right now results vary depending on data splitting.
+# - Think about how missing values are biasing results. There are so many! How did Kremer et al. deal with this?
+
+
+# -----------------------
 # Packages
+# -----------------------
 library(devtools) 
 library(npcausal)
 library(readstata13)
@@ -14,23 +22,21 @@ library(npcausal)
 expit = function(x){ return( exp(x)/(1+exp(x)) ) }
 options(warn=-1)
 
+
+
+
+# -----------------------
+# Load and preselect data
+# -----------------------
+
 # Working directory
 setwd("/Users/mariacuellar/Desktop/CMU/Papers/2nd Heinz paper:ADA/Shaken Baby Syndrome/THESIS/Data leads/JPAL/Springs/dta/")
 
 # Load data
 dat1 = read.dta13("reg_data_children_Aug2010.dta", missing.type = TRUE)
 dim(dat1)
-# dat2 = dat1[,grepl("problem_weight", names(dat1), fixed=TRUE)]
 
-
-# Sample restricted to children under age three at baseline (in 2004) and children born since 2004
-# /*DEFINE SAMPLE OF INTEREST*/
-#   
-#   *WE EXCLUDE ALL KIDS IN HOUSEHOLDS THAT RECEIVED WG IN HM3, AS WELL AS KIDS NOT AT ITT SPRINGS OR KIDS NOT IN THE HOUSEHOLD SAMPLE 
-# *CHILDREN ARE INCLUDED IN THE REGRESSION SAMPLE IF THEY ARE AGE 3 OR UNDER AT BASELINE OR AGE 3 OR UNDER WHEN THEY JOIN THE SAMPLE IN LATER ROUNDS; 
-# *WE ALSO EXCLUDE CHILD-ROUND OBSERVATIONS WHERE THE ANTHROPOMETRIC OR AGE DATA IS FLAGGED AS HAVING A SERIOUS ERROR;
-# *FINALLY, OBSERVATIONS MISSING DATA ON WHETHER THE HOUSEHOLD USES THE ICS SPRING EXCLUSIVELY OR USES MULTIPLE SPRINGS ARE ALSO EXCLUDED FROM THE REGRESSIONS;
-
+# Remove the cases Kremer et al. removed for their article
 dat2 = dat1[which( dat1$multiusers_l_base==0 | is.na(dat1$multiusers_l_base==0) ),]
 dat3 = dat2[which( dat2$height_outlier_severe==0 | is.na(dat2$height_outlier_severe) ),]
 dat4 = dat3[which( dat3$problem_weight==0 | is.na(dat3$problem_weight) ),]
@@ -40,10 +46,8 @@ dat7 = dat6[which( dat6$problem_age==0 | is.na(dat6$problem_age) ),]
 dat8 = dat7[which( dat7$base_age<=3 | is.na(dat7$base_age) ),]
 
 dat = dat8
-dim(dat) # [1] 22620  4146
+dim(dat)
 
-
-# Also have behaviors (handwashing), household water collection and treatment behavior, and socioeconomic sta- tus
 # Make my variables
 A = ifelse(dat$evertreat=="TREAT", 0, 1) # Treatment. What about this var? ba_tc
 Y = dat$c14_d_child_diarrhea # Diarrhea in past week. Diarrhea defined as three or more “looser than normal” stools within 24 hours at any time in the past week
@@ -56,7 +60,6 @@ X6.0 = dat$hygiene_know_base # Mother's hygiene knowledge at baseline. average o
 X7.0 = dat$latrine_density_base # Baseline latrine density
 X8.0 = dat$numkids_base # Number of children under 12 living at home
 samplesize = length(A)
-
 
 # Undoing the de-meaned variables
 X4.1 = X4.0 - (min(X4.0[X4.0<0], na.rm = TRUE) + max(X4.0[X4.0<0], na.rm = TRUE))
@@ -79,7 +82,9 @@ nrow(dff) # [1] 2933
 
 
 
-# EDA
+# -----------------------
+# Exploratory data analysis
+# -----------------------
 
 # Checking crosstab for Y and A
 table(A, useNA="ifany")
@@ -92,7 +97,7 @@ table(dff$X1)
 # Iron roof indicator
 table(dff$X5)
 
-
+# Lots of histograms for conginuous (or categorical) variables
 pdf(file="EDA.pdf", width=10, height=5)
 
 par(mfrow=c(2,3))
@@ -118,18 +123,12 @@ dev.off()
 
 par(mfrow=c(1,1))
 
-# rm(list=ls())
-# setwd("/Users/mariacuellar/Desktop/CMU/Papers/2nd Heinz paper:ADA/Shaken Baby Syndrome/THESIS/Data leads/JPAL/Springs/")
-# save(dff, file="dff.rda")
-# load("dff.rda")
 
-table(dff$Y)
-table(dff$A)
-table(dff$A, dff$Y)
 
-dff = dff[which(dff$X2<=3),]
 
-head(dff)
+# -----------------------
+# Checking results for ATE, from Ed's R package
+# -----------------------
 
 library0 = c("SL.earth","SL.gam","SL.glm","SL.glmnet", "SL.glm.interaction", "SL.mean","SL.ranger")
 library1 = c("SL.gam","SL.glm")
@@ -140,10 +139,21 @@ ATE[1]$res
 
 
 
+
+# -----------------------
+# Example point for my analysis
+# -----------------------
+
 # selected point to evaluate PC
 mypoint = c(1, 6, 6, 4, 1, 3, .4, 5)
 dff.test1 = dff[1,]
 dff.test1[1, 3:10] = mypoint
+
+
+
+# -----------------------
+# Estimating PC and confidence intervals with parametric plug-in estimator
+# -----------------------
 
 # data splitting
 index = sample(1:nrow(dff)) # randomize indices
@@ -168,83 +178,67 @@ PI_P_X_gammahat = 1 - PI_P_X_mu0_hat/PI_P_X_mu1_hat
 PI_P_X_gammahat_mypoint = 1 - PI_P_X_mu0_hat_mypoint/PI_P_X_mu1_hat_mypoint
 PI_P_X_gammahat_mypoint
 
-  fun.PI_P_X_boot = function(xthedata){
-    
-    # data splitting
-    index = sample(1:nrow(dff)) # randomize indices
-    dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
-    dff.test = dff[index,][((nrow(dff)/2)+1):nrow(dff),] # make testing set
-    dff.test1 = dff.test[1,]
-    dff.test1[1,]$X1 = dff.test1[1,]$X2 = dff.test1[1,]$X3 = dff.test1[1,]$X4 = mypoint[1]
-    
-    # estimating nuisance functions
-    PI_P_X_mu0 = glm(Y~X1+X2+X3+X4+X5+X6+X7+X8, data = dff.train[which(dff.train$A==0),], family = "poisson")
-    PI_P_X_mu1 = glm(Y~X1+X2+X3+X4+X5+X6+X7+X8, data = dff.train[which(dff.train$A==1),], family = "binomial")
-    
-    # getting fitted values
-    PI_P_X_mu0_hat_mypoint = predict(PI_P_X_mu0, newdata = dff.test1, type="response")
-    PI_P_X_mu1_hat_mypoint = predict(PI_P_X_mu1, newdata = dff.test1, type="response")
-    
-    # calculating gamma hat
-    PI_P_X_gammahat_mypoint = 1 - PI_P_X_mu0_hat_mypoint/PI_P_X_mu1_hat_mypoint
-    
-    return(PI_P_X_gammahat_mypoint)
-  }
+# function for bootstrapped standard errors
+fun.PI_P_X_boot = function(xthedata){
   
-  # apply bootstrap
-  bootreps=100
-  PI_P_X_bootvec = 0
-  foreach(b=1:bootreps, .options.multicore=list(preschedule=TRUE)) %dopar% {
+  # data splitting
+  index = sample(1:nrow(dff)) # randomize indices
+  dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
+  dff.test = dff[index,][((nrow(dff)/2)+1):nrow(dff),] # make testing set
+  dff.test1 = dff.test[1,]
+  dff.test1[1,]$X1 = dff.test1[1,]$X2 = dff.test1[1,]$X3 = dff.test1[1,]$X4 = mypoint[1]
   
-    # randomize indices
-    index.b = sample(1:nrow(dff), replace=FALSE)
-    
-    # select new sample of rows from dff
-    newdff = dff[index.b, ]
-    
-    # calculating gammahat_star (star because it's from a bootstrap)
-    PI_P_X_gammahat_star = fun.PI_P_X_boot(newdff)
-    
-    # store in a vector
-    PI_P_X_bootvec[b] <- PI_P_X_gammahat_star
-  }
+  # estimating nuisance functions
+  PI_P_X_mu0 = glm(Y~X1+X2+X3+X4+X5+X6+X7+X8, data = dff.train[which(dff.train$A==0),], family = "poisson")
+  PI_P_X_mu1 = glm(Y~X1+X2+X3+X4+X5+X6+X7+X8, data = dff.train[which(dff.train$A==1),], family = "binomial")
+  
+  # getting fitted values
+  PI_P_X_mu0_hat_mypoint = predict(PI_P_X_mu0, newdata = dff.test1, type="response")
+  PI_P_X_mu1_hat_mypoint = predict(PI_P_X_mu1, newdata = dff.test1, type="response")
+  
+  # calculating gamma hat
+  PI_P_X_gammahat_mypoint = 1 - PI_P_X_mu0_hat_mypoint/PI_P_X_mu1_hat_mypoint
+  
+  return(PI_P_X_gammahat_mypoint)
+}
+  
+# apply bootstrap
+bootreps=100
+PI_P_X_bootvec = 0
+foreach(b=1:bootreps, .options.multicore=list(preschedule=TRUE)) %dopar% {
 
-  # standard error
-  PI_P_X_gammahat_sd_mypoint = sd(unlist(PI_P_X_bootvec.1))
+  # randomize indices
+  index.b = sample(1:nrow(dff), replace=FALSE)
   
-  # confidence interval lower bound and upper bound
-  PI_P_X_gammahat_mypoint - 2*PI_P_X_gammahat_sd_mypoint / sqrt(dim(dff)[1])
-  PI_P_X_gammahat_mypoint + 2*PI_P_X_gammahat_sd_mypoint / sqrt(dim(dff)[1])
+  # select new sample of rows from dff
+  newdff = dff[index.b, ]
+  
+  # calculating gammahat_star (star because it's from a bootstrap)
+  PI_P_X_gammahat_star = fun.PI_P_X_boot(newdff)
+  
+  # store in a vector
+  PI_P_X_bootvec[b] <- PI_P_X_gammahat_star
+}
 
+# standard error
+PI_P_X_gammahat_sd_mypoint = sd(unlist(PI_P_X_bootvec.1))
 
-  
-  
 # confidence interval
 PI_P_X_ci_mypoint = paste(PI_P_X_gammahat_mypoint - 2*PI_P_X_gammahat_sd_mypoint / sqrt(dim(dff)[1]), 
                           PI_P_X_gammahat_mypoint + 2*PI_P_X_gammahat_sd_mypoint / sqrt(dim(dff)[1]), 
                           sep=", ")
 
-# [1] "0.240194504684209, 0.242980511173077"
+  
+  
+  
 
-
-# Plug-in, nonparametric, untransformed X's estimator:
-# RandomForest----
-# Fitting model
+# -----------------------
+# Estimating PC and confidence intervals with NONparametric plug-in estimator (random forest)
+# -----------------------
 # data splitting
 index = sample(1:nrow(dff)) # randomize indices
 dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
 dff.test = dff[index,][((nrow(dff)/2)+1):nrow(dff),] # make testing set
-
-mypoint = c(1, 6, 6, 4, 1, 3, .4, 5)
-dff.test1 = dff.test[1,]
-dff.test1[1,]$X1 = mypoint[1]
-dff.test1[1,]$X2 = mypoint[2]
-dff.test1[1,]$X3 = mypoint[3]
-dff.test1[1,]$X4 = mypoint[4]
-dff.test1[1,]$X5 = mypoint[5]
-dff.test1[1,]$X6 = mypoint[6]
-dff.test1[1,]$X7 = mypoint[7]
-dff.test1[1,]$X8 = mypoint[8]
 
 # estimating nuisance functions
 PI_N_X_mu0 = randomForest(Y~X1+X2+X3+X4+X5+X6+X7+X8, data = dff.train[which(dff.train$A==0),], type=regression)
@@ -268,8 +262,10 @@ PI_N_X_ci_mypoint = paste(NA, NA, sep=", ")
 
 
 
-#  Influence-function-based estimator, estimate nuisance parameters with plugin nonparametric untransformed Xs ----
-#  Defining the nuisance parameters
+
+# -----------------------
+# Estimating PC and confidence intervals with IFB estimator (random forest)
+# -----------------------
 # data splitting
 index = sample(1:nrow(dff)) # randomize indices
 dff.train = dff[index,][1:(nrow(dff)/2),] # make training set
@@ -298,9 +294,6 @@ Y = dff$Y
 IF_N_X_ystar = (1/mu1)*((mu0/mu1)*(1/pi)*A*(Y-mu1) - (1/(1-pi))*(1-A)*(Y-mu0)) + (1 - mu0/mu1)
 
 # Fitting model
-param=true_values
-theY=IF_N_X_ystar
-
 fun.obj = function(param, theY){
   
   beta1 = param[1]
@@ -333,10 +326,14 @@ fun.obj = function(param, theY){
 true_values = c(.1,.1,.1,.1,.1,.1,.1,.1)
 result_optim = optim(f = fun.obj, p = true_values, theY = IF_N_X_ystar) #,control=list(trace=TRUE))
 betahat = result_optim$par
-betahat # [1]  2.53984331  0.82933033 -1.42309767 -0.02986857  0.89654234  2.37261168  2.23507364  0.29806193
-round(exp(betahat),2) # [1] 12.68  2.29  0.24  0.97  2.45 10.73  9.35  1.35
 
-# Getting predicted values
+# estimated coefficients
+betahat
+
+# estimated coefficients, exponentiated and rounded to 2 decimal points
+round(exp(betahat),2)
+
+# getting predicted values
 X = as.matrix(dff[, 3:(dim(dff)[2])])
 IF_N_X_gammahat = expit(X %*% betahat)
 IF_N_X_gammahat_mypoint = expit(betahat[1]*mypoint[1] + betahat[2]*mypoint[2] + 
@@ -344,7 +341,6 @@ IF_N_X_gammahat_mypoint = expit(betahat[1]*mypoint[1] + betahat[2]*mypoint[2] +
                                   betahat[5]*mypoint[5] + betahat[6]*mypoint[6] +
                                   betahat[7]*mypoint[7] + betahat[8]*mypoint[8])
 
-IF_N_X_gammahat_mypoint
 
 # # variance with bootstrap
 # fun.IF_N_X_boot = function(xthedata){
@@ -455,7 +451,7 @@ IF_N_X_gammahat_mypoint
 #                           sep=", ")
 
 
-# variance
+# variance with sandwich
 estgammahat = IF_N_X_gammahat
 estystar = as.matrix(dff$Y)
 estmod = betahat
@@ -547,18 +543,16 @@ IF_N_X_gammahat_sd_mypoint = sqrt(sandwich.variance_mypoint)
 IF_N_X_ci_mypoint = paste(round(IF_N_X_gammahat_mypoint - 2*IF_N_X_gammahat_sd_mypoint / sqrt(samplesize),2),
                           round(IF_N_X_gammahat_mypoint + 2*IF_N_X_gammahat_sd_mypoint / sqrt(samplesize),2),
                           sep=", ")
-#[1] "0.79, 0.93"
-# [1] "0.23, 0.77"
-
-
-mean(IF_N_X_foraveraging_LB)
-mean(IF_N_X_foraveraging_UB)
-mean(IF_N_X_foraveraging_gammahat)
 
 
 
 
-# Confidence intervals for betas 
+
+
+# -----------------------
+# Exploring the results for the coefficients
+# -----------------------
+# confidence intervals for betas 
 betacov = M.inverse %*% covphi %*% t(M.inverse)
 betahat1_sd = sqrt(betacov[1,1])
 betahat2_sd = sqrt(betacov[2,2])
@@ -578,15 +572,8 @@ ci_beta6 = paste(round(exp(betahat[6] - 2*betahat6_sd/sqrt(samplesize)), 2), rou
 ci_beta7 = paste(round(exp(betahat[7] - 2*betahat7_sd/sqrt(samplesize)), 2), round(exp(betahat[7] + 2*betahat7_sd/sqrt(samplesize)), 2), sep=", ")
 ci_beta8 = paste(round(exp(betahat[8] - 2*betahat8_sd/sqrt(samplesize)), 2), round(exp(betahat[8] + 2*betahat8_sd/sqrt(samplesize)), 2), sep=", ")
 
-
-IF_N_X_gammahat_mypoint
-IF_N_X_ci_mypoint
 c(ci_beta1, ci_beta2, ci_beta3, ci_beta4, ci_beta5, ci_beta6, ci_beta7, ci_beta8)
 round(exp(betahat),2)
-
-
-# [1] "3.24, 3.65"   "6.95, 7.04"   "0.28, 0.28"   "16.79, 17.02" "35.02, 39.45" "22.9, 23.21"  "4.87, 5.49" "0.13, 0.13"  
-
 
 
 # How does gammahat change for different values of mother's years of education?
@@ -624,7 +611,6 @@ plot(varyinggammahat1, type="o", main="Estimated PC v. age", ylab="Estimated PC"
 dev.off()
 
 
-
 # How does gammahat change for different values of gender?
 apoint = c(0, 1, 1, 1, 1, 1, 1, 1)
 gammahat_apoint.1 = expit(betahat[1]*apoint[1] + betahat[2]*apoint[2] + 
@@ -638,8 +624,8 @@ gammahat_apoint.2 = expit(betahat[1]*apoint[1] + betahat[2]*apoint[2] +
                             betahat[5]*apoint[5] + betahat[6]*apoint[6] +
                             betahat[7]*apoint[7] + betahat[8]*apoint[8])
 
-gammahat_apoint.1 # 0.9755818
-gammahat_apoint.2 # 0.9973464
+gammahat_apoint.1
+gammahat_apoint.2
 
 
 
